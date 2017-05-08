@@ -4,14 +4,31 @@
 #include <stdio.h>
 using namespace std;
 
+struct idInfo{
+	int index;
+	string type;
+};
+
 class SymbolTable{
 private:
 	vector<string> i_symbol;
-	map<string,int> symbol_i;
+	map<string,idInfo> symbol_i;
 	int index;
 public:
 	SymbolTable();
-	int lookup(string s);
-	int insert(string s);
+	bool isExist(string);
+	idInfo* lookup(string);
+	int insert(string);
 	int dump();
+};
+
+class SymbolTableList{
+private:
+	int top;
+	vector<SymbolTable> list;
+public:
+	SymbolTableList();
+	void pushTable(SymbolTable);
+	SymbolTable* popTable(SymbolTable);
+	idInfo* lookup(string);
 };
