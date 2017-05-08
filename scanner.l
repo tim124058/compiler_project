@@ -10,9 +10,9 @@ using namespace std;
 
 #define MAX_LINE_LENG 256
 
-int linenum = 1;
-char buf[MAX_LINE_LENG];
-char strbuf[MAX_LINE_LENG];
+int linenum = 1;				// line number
+char buf[MAX_LINE_LENG];		// line buffer
+char strbuf[MAX_LINE_LENG];		// string buffer
 
 %}
 
@@ -95,6 +95,7 @@ integer {digit}+
 
 {identifier} {
 	tokenString("id",yytext);
+	yylval.sval = new string(yytext);
 	return ID;
 }
 

@@ -5,6 +5,7 @@ using namespace std;
 extern int yylex(void);
 void yyerror(const char *);
 %}
+/* type */
 %union {
 	int val;
 	double dval;
@@ -12,16 +13,26 @@ void yyerror(const char *);
 	string* sval;
 }
 
+/* tokens */
 
+/* Operator : length > one char */
 %token LT GT EQ NEQ ADDA SUBA MULA DIVA
-%token BOOL BREAK CASE CONST CONTINUE DEFAULT ELSE FOR FUNC GO IF IMPORT INT NIL PRINT PRINTLN REAL RETURN STRING STRUCT SWITCH TYPE VAR VOID WHILE
 
-%token NAME BOOL_CONST ID REAL_CONST STR_CONST
+/* keywords */
+%token BREAK CASE CONTINUE DEFAULT ELSE FOR FUNC GO IF IMPORT NIL PRINT PRINTLN RETURN STRUCT SWITCH TYPE VAR WHILE
+%token BOOL CONST INT REAL STRING VOID 
+
+%token <sval> ID 
 %token <val> INT_CONST 
+%token <bval> BOOL_CONST 
+%token <dval> REAL_CONST 
+%token <sval> STR_CONST
 
+/* type declare for non-terminal symbols */
 %type <val> expression
+
 %%
-statement: NAME '=' expression 
+statement: ID '=' expression { printf("%s = %d\n", (*$1).c_str(), $3); }
 		 | expression 	{ printf("= %d\n", $1); }
 		 ;
 expression: expression '+' INT_CONST { $$ = $1 + $3; } 
