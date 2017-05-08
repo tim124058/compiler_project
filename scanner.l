@@ -4,15 +4,18 @@ using namespace std;
 #include "y.tab.hpp"
 
 #define LIST     strcat(buf,yytext)
-#define token(t) {LIST; printf("<%s>\n",#t);}
-#define tokenInteger(t,i) {LIST; printf("<%s:%d>\n",t,i);}
-#define tokenString(t,s) {LIST; printf("<%s:%s>\n",t,s);}
+#define token(t) {LIST; if(prtT) printf("<%s>\n",#t);}
+#define tokenInteger(t,i) {LIST; if(prtT) printf("<%s:%d>\n",t,i);}
+#define tokenString(t,s) {LIST; if(prtT) printf("<%s:%s>\n",t,s);}
 
 #define MAX_LINE_LENG 256
 
 int linenum = 1;				// line number
 char buf[MAX_LINE_LENG];		// line buffer
 char strbuf[MAX_LINE_LENG];		// string buffer
+
+int prtT = 0;	//print token
+int prtS = 1;	//print source code
 
 %}
 
@@ -122,7 +125,7 @@ integer {digit}+
 	char c = yyinput();
 	if(c != '"'){
 		strcat(buf,"\"");
-		printf("<%s: %s>\n", "string", strbuf);
+		if(prtT) printf("<%s: %s>\n", "string", strbuf);
 		unput(c);
 		BEGIN INITIAL;
 		return STR_CONST;
@@ -152,7 +155,7 @@ integer {digit}+
 
 <COMMENT>\n {
 	LIST;
-	printf("%d: %s", linenum++, buf);
+	if(prtS) printf("%d: %s", linenum++, buf);
 	buf[0] = '\0';
 }
 <COMMENT>. {
@@ -169,7 +172,7 @@ integer {digit}+
 
 \n {
 	LIST;
-	printf("%d: %s", linenum++, buf);
+	if(prtS) printf("%d: %s", linenum++, buf);
 	buf[0] = '\0';
 }
 
