@@ -92,6 +92,8 @@ integer {digit}+
 "void" {token(VOID); return VOID;}
 "while" {token(WHILE); return WHILE;}
 
+"read" {token(READ); return READ;}
+
 "false" {tokenString("boolean","FALSE"); return BOOL_CONST;}
 "true" {tokenString("boolean","TRUE"); return BOOL_CONST;}
 
