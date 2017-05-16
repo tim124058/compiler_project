@@ -1,10 +1,12 @@
 %{
 #include <iostream>
 #include <stdio.h>
+#include "symbols.hpp"
+#include "lex.yy.cpp"
+#define Trace(t) if (Opt_P) printf(t)
 using namespace std;
-extern int yylex(void);
-extern int yylineno;
 void yyerror(const char *);
+int Opt_P = 1;
 %}
 /* type */
 %union {
@@ -40,7 +42,7 @@ void yyerror(const char *);
 %left '+' '-'
 %left '*' '/' '%'
 %left '^'
-%nonassoc UMINUS
+%nonassoc UMINUS UPLUS
 
 %%
 /* program form */
@@ -179,6 +181,7 @@ const_exp: const_value
 		 | const_exp '&' const_exp
 		 | const_exp '|' const_exp
 		 | '-' const_exp %prec UMINUS
+		 | '+' const_exp %prec UPLUS
 		 | '(' const_exp ')'
 	 	 ;
 
@@ -202,6 +205,7 @@ expression : ID
 		   | expression '&' expression
 		   | expression '|' expression
 		   | '-' expression %prec UMINUS
+		   | '+' expression %prec UPLUS
 		   | '(' expression ')'
 		   ;
 
@@ -215,7 +219,7 @@ expression : ID
 		  /*; */
 %%
 void yyerror(const char *s) {
-	fprintf(stderr, "line %d: %s\n", yylineno, s);
+	fprintf(stderr, "line %d: %s\n", linenum, s);
 	exit(1);
 }
 
