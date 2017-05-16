@@ -9,7 +9,7 @@ CXX = g++
 all: $(TARGET)
 
 $(TARGET): lex.yy.cpp y.tab.cpp symbols.cpp symbols.hpp 
-	$(CXX) lex.yy.cpp y.tab.cpp symbols.cpp -o $@ -ll -ly
+	$(CXX) y.tab.cpp symbols.cpp -o $@ -ll -ly
 
 lex.yy.cpp: scanner.l
 	$(LEX) -o $@ $^
