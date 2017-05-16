@@ -94,8 +94,16 @@ integer {digit}+
 
 "read" {token(READ); return READ;}
 
-"false" {tokenString("boolean","FALSE"); return BOOL_CONST;}
-"true" {tokenString("boolean","TRUE"); return BOOL_CONST;}
+"false" {
+	tokenString("boolean","FALSE");
+	yylval.bval = false;
+	return BOOL_CONST;
+}
+"true" {
+	tokenString("boolean","TRUE");
+	yylval.bval = true;
+	return BOOL_CONST;
+}
 
 
 {identifier} {
@@ -112,6 +120,7 @@ integer {digit}+
 
 {integer}"."{integer}([Ee][+-]{integer})? {
 	tokenString("real",yytext);
+	yylval.dval = atof(yytext);
 	return REAL_CONST;
 }
 
@@ -130,6 +139,7 @@ integer {digit}+
 		if(prtT) printf("<%s: %s>\n", "string", strbuf);
 		unput(c);
 		BEGIN INITIAL;
+		yylval.sval = new string(strbuf);
 		return STR_CONST;
 	}else{
 		strcat(buf,"\"\"");
