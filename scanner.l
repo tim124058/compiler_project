@@ -51,8 +51,8 @@ integer {digit}+
 
 "<" {token('<'); return yytext[0];}
 ">" {token('>'); return yytext[0];}
-"<=" {token('<='); return LT;}
-">=" {token('>='); return GT;}
+"<=" {token('<='); return LE;}
+">=" {token('>='); return GE;}
 "==" {token('=='); return EQ;}
 "!=" {token('!='); return NEQ;}
 
