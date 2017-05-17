@@ -1,6 +1,19 @@
 #include "symbols.hpp"
 
 
+// struct constructor
+idValue::idValue(){
+	val = 0;
+	bval = false;
+	dval = 0.0;
+	sval = "";
+}
+idInfo::idInfo(){
+	index = 0;
+	type = Int_type;
+	flag = ConstVal_flag;
+}
+
 /*
  *	SymbolTable
  */
@@ -23,12 +36,15 @@ idInfo* SymbolTable::lookup(string s){
 		return NULL;
 }
 
-int SymbolTable::insert(string s){
-	if(symbol_i.find(s) != symbol_i.end()){
+int SymbolTable::insert(string id, int type, idValue value, int flag){
+	if(symbol_i.find(id) != symbol_i.end()){
 		return -1;		// find it in SymbolTable
 	}
-	i_symbol.push_back(s);
-	symbol_i[s].index = index;
+	i_symbol.push_back(id);
+	symbol_i[id].index = index;
+	symbol_i[id].type = type;
+	symbol_i[id].value = value;
+	symbol_i[id].flag = flag;
 	index++;
 	return index-1;
 }
@@ -47,22 +63,22 @@ int SymbolTable::dump(){
  */
 SymbolTableList::SymbolTableList(){
 	top = -1;
+	pushTable();
 }
 
 // push SymbolTable into SymbolTableList
-void SymbolTableList::pushTable(SymbolTable stb){
-	list.push_back(stb);
+void SymbolTableList::pushTable(){
+	list.push_back(SymbolTable());
 	top++;
 }
 
-// pop last SymbolTable in SymbolTableList
-SymbolTable* SymbolTableList::popTable(SymbolTable){
+// pop last SymbolTable in SymbolTableList, success->return true
+bool SymbolTableList::popTable(){
 	if(list.size() <=0)
-		return NULL;
+		return false;
 
-	SymbolTable *tmp = new SymbolTable(list.back());
 	list.pop_back();
-	return tmp;
+	return true;
 }
 
 // get s info from SymbolTableList
@@ -74,4 +90,68 @@ idInfo* SymbolTableList::lookup(string s){
 		}
 	}
 	return NULL;		// not found
+}
+
+
+int SymbolTableList::insertNoInit(string id, int type){
+	return list[top].insert(id,type,idValue(), VarNoInit_flag);
+}
+int SymbolTableList::insert(string id, int type, int value, int flag){
+	idValue tmp;
+	tmp.val = value;
+	return list[top].insert(id,type,tmp,flag);
+}
+int SymbolTableList::insert(string id, int type, bool value, int flag){
+	idValue tmp;
+	tmp.bval = value;
+	return list[top].insert(id,type,tmp,flag);
+}
+int SymbolTableList::insert(string id, int type, double value, int flag){
+	idValue tmp;
+	tmp.dval = value;
+	return list[top].insert(id,type,tmp,flag);
+}
+int SymbolTableList::insert(string id, int type, string value, int flag){
+	idValue tmp;
+	tmp.sval = value;
+	return list[top].insert(id,type,tmp,flag);
+}
+
+int SymbolTableList::insert(string id, idInfo idinfo){
+	return list[top].insert(id,idinfo.type,idinfo.value,idinfo.flag);
+}
+
+
+// Build const value
+idInfo* intConst(int val){
+	idInfo* tmp = new idInfo();
+	tmp->index=0;
+	tmp->type=Int_type;
+	tmp->value.val=val;
+	tmp->flag=ConstVal_flag;
+	return tmp;
+}
+idInfo* boolConst(bool val){
+	idInfo* tmp = new idInfo();
+	tmp->index=0;
+	tmp->type=Bool_type;
+	tmp->value.bval=val;
+	tmp->flag=ConstVal_flag;
+	return tmp;
+}
+idInfo* realConst(double val){
+	idInfo* tmp = new idInfo();
+	tmp->index=0;
+	tmp->type=Real_type;
+	tmp->value.dval=val;
+	tmp->flag=ConstVal_flag;
+	return tmp;
+}
+idInfo* strConst(string* val){
+	idInfo* tmp = new idInfo();
+	tmp->index=0;
+	tmp->type=Str_type;
+	tmp->value.sval=*val;
+	tmp->flag=ConstVal_flag;
+	return tmp;
 }

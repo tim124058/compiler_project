@@ -5,8 +5,9 @@
 #include "lex.yy.cpp"
 #define Trace(t) if (Opt_P) printf(t)
 using namespace std;
-void yyerror(const char *);
+void yyerror(string s);
 int Opt_P = 1;
+SymbolTableList stl;
 %}
 /* type */
 %union {
@@ -14,12 +15,13 @@ int Opt_P = 1;
 	double dval;
 	bool bval; 
 	string* sval;
+	idInfo* idinfo;
 }
 
 /* tokens */
 
 /* Operator : length > one char */
-%token LT GT EQ NEQ ADDA SUBA MULA DIVA
+%token LE GE EQ NEQ ADDA SUBA MULA DIVA
 
 /* keywords */
 %token BREAK CASE CONTINUE DEFAULT ELSE FOR FUNC GO IF IMPORT NIL PRINT PRINTLN RETURN STRUCT SWITCH TYPE VAR WHILE READ
@@ -32,13 +34,13 @@ int Opt_P = 1;
 %token <sval> STR_CONST
 
 /* type declare for non-terminal symbols */
-/* %type <val> expression */
+ %type <idinfo> const_value expression
 
 /* precedence */
 %left '|'
 %left '&'
 %left '!'
-%left '<' '>' LT GT EQ NEQ
+%left '<' '>' LE GE EQ NEQ
 %left '+' '-'
 %left '*' '/' '%'
 %left '^'
@@ -55,15 +57,20 @@ opt_var_dec: var_dec opt_var_dec
 		   ;
 
 /* declaration constant */
-const_dec: CONST ID '=' const_exp
+const_dec: CONST ID '=' expression
+		 {
+			if($4->flag != ConstVal_flag && $4->flag != ConstVar_flag) yyerror("const assign error");
+			$4->flag = ConstVar_flag;
+			if(stl.insert(*$2,*$4) == -1) yyerror("variable redefinition");
+		 }
 		 ;
 
 /* declaration variable */
 var_dec: VAR ID var_type opt_assign
-	   | VAR ID '[' const_exp ']' var_type
+	   | VAR ID '[' expression ']' var_type
 	   ;
 
-opt_assign: '=' const_exp
+opt_assign: '=' expression
 		  |
 		  ;
 
@@ -81,10 +88,10 @@ opt_func_dec : func_dec opt_func_dec
 			 |	/* zero or more */
 			 ;
 
-func_dec : FUNC func_type ID '(' opt_params ')' '{'
+func_dec : FUNC func_type ID {stl.pushTable();} '(' opt_params ')' '{'
 			   opt_var_dec
 			   opt_statement
-		   '}'
+		   '}' {if(!stl.popTable()) yyerror("pop symbol table error");}
 
 func_type: INT
 		 | REAL
@@ -110,10 +117,6 @@ opt_statement: statement opt_statement
 			 ;
 
 statement: ID '=' expression
-		 | ID ADDA expression
-		 | ID SUBA expression
-		 | ID MULA expression
-		 | ID DIVA expression
 		 | ID '[' expression ']' '=' expression
 		 | PRINT expression
 		 | PRINTLN expression
@@ -137,10 +140,10 @@ comma_separated_expression: comma_separated_expression ',' expression
 						  ;
 
 
-compound: '{'
+compound: '{' {stl.pushTable();}
 		   		opt_var_dec
 		   		opt_statement
-		  '}'
+		  '}' {if(!stl.popTable()) yyerror("pop symbol table error");}
 		;
 
 conditional: IF '(' expression ')' statement
@@ -157,69 +160,248 @@ for_exp: statement ';' expression ';' statement
 	   | expression
 	   ;
 
-const_value: INT_CONST
-		   | BOOL_CONST
-		   | REAL_CONST
-		   | STR_CONST
+const_value: INT_CONST { $$=intConst($1); }
+		   | BOOL_CONST { $$=boolConst($1); }
+		   | REAL_CONST { $$=realConst($1); }
+		   | STR_CONST { $$=strConst($1); }
 		   ;
 
 
-const_exp: const_value
-		 | const_exp '+' const_exp
-		 | const_exp '-' const_exp
-		 | const_exp '*' const_exp
-		 | const_exp '/' const_exp
-		 | const_exp '%' const_exp
-		 | const_exp '^' const_exp
-		 | const_exp '<' const_exp
-		 | const_exp '>' const_exp
-		 | const_exp LT const_exp
-		 | const_exp GT const_exp
-		 | const_exp EQ const_exp
-		 | const_exp NEQ const_exp
-		 | '!' const_exp
-		 | const_exp '&' const_exp
-		 | const_exp '|' const_exp
-		 | '-' const_exp %prec UMINUS
-		 | '+' const_exp %prec UPLUS
-		 | '(' const_exp ')'
-	 	 ;
-
-expression : ID
-		   | const_exp
+expression : ID 
+		   	{
+				idInfo *tmp;
+				tmp = stl.lookup(*$1);
+				if(tmp == NULL) yyerror("undeclared identifier " + *$1);
+				if(tmp->flag == ConstVal_flag || tmp->flag == ConstVar_flag){
+					tmp->flag = ConstVal_flag;
+				}
+				$$ = tmp;
+			}
+		   | const_value
 		   | ID '[' expression ']'
 		   | func_invocation
 		   | expression '+' expression
+			{
+				if($1->type != $3->type) yyerror("type not match");
+				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
+					if($1->type == Int_type){
+						$$ = intConst($1->value.val + $3->value.val);
+						cout << "# " << $$->value.val << " = " << $1->value.val << "+" << $3->value.val<<endl;
+					}else if($1->type == Real_type){
+						$$ = realConst($1->value.dval + $3->value.dval);
+						cout << "# " << $$->value.dval << " = " << $1->value.dval << "+" << $3->value.dval<<endl;
+					}else if($1->type == Str_type){
+						$$ = strConst(new string($1->value.sval + $3->value.sval));
+						cout << "# " << $$->value.sval << " = " << $1->value.sval << "+" << $3->value.sval<<endl;
+					}else yyerror("operator error");
+				}
+			}
 		   | expression '-' expression
+			{
+				if($1->type != $3->type) yyerror("type not match");
+				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
+					if($1->type == Int_type){
+						$$ = intConst($1->value.val - $3->value.val);
+						cout << "# " << $$->value.val << " = " << $1->value.val << "-" << $3->value.val<<endl;
+					}else if($1->type == Real_type){
+						$$ = realConst($1->value.dval - $3->value.dval);
+						cout << "# " << $$->value.dval << " = " << $1->value.dval << "-" << $3->value.dval<<endl;
+					}else yyerror("operator error");
+				}
+			}
 		   | expression '*' expression
+			{
+				if($1->type != $3->type) yyerror("type not match");
+				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
+					if($1->type == Int_type){
+						$$ = intConst($1->value.val * $3->value.val);
+						cout << "# " << $$->value.val << " = " << $1->value.val << "*" << $3->value.val<<endl;
+					}else if($1->type == Real_type){
+						$$ = realConst($1->value.dval * $3->value.dval);
+						cout << "# " << $$->value.dval << " = " << $1->value.dval << "*" << $3->value.dval<<endl;
+					}else yyerror("operator error");
+				}
+			}
 		   | expression '/' expression
+			{
+				if($1->type != $3->type) yyerror("type not match");
+				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
+					if($1->type == Int_type){
+						$$ = intConst($1->value.val / $3->value.val);
+						cout << "# " << $$->value.val << " = " << $1->value.val << "/" << $3->value.val<<endl;
+					}else if($1->type == Real_type){
+						$$ = realConst($1->value.dval / $3->value.dval);
+						cout << "# " << $$->value.dval << " = " << $1->value.dval << "/" << $3->value.dval<<endl;
+					}else yyerror("operator error");
+				}
+			}
 		   | expression '%' expression
+			{
+				if($1->type != $3->type) yyerror("type not match");
+				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
+					if($1->type == Int_type){
+						$$ = intConst($1->value.val % $3->value.val);
+						cout << "# " << $$->value.val << " = " << $1->value.val << "%" << $3->value.val<<endl;
+					}else yyerror("operator error");
+				}
+			}
 		   | expression '^' expression
+			{
+				if($1->type != $3->type) yyerror("type not match");
+				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
+					if($1->type == Int_type){
+						$$ = intConst($1->value.val ^ $3->value.val);
+						cout << "# " << $$->value.val << " = " << $1->value.val << "^" << $3->value.val<<endl;
+					}else yyerror("operator error");
+				}
+			}
 		   | expression '<' expression
+			{
+				if($1->type != $3->type) yyerror("type not match");
+				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
+					if($1->type == Int_type){
+						$$ = boolConst($1->value.val < $3->value.val);
+						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.val << "<" << $3->value.val<<endl;
+					}else if($1->type == Real_type){
+						$$ = boolConst($1->value.dval < $3->value.dval);
+						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.dval << "<" << $3->value.dval<<endl;
+					}else yyerror("operator error");
+				}
+			}
 		   | expression '>' expression
-		   | expression LT expression
-		   | expression GT expression
+			{
+				if($1->type != $3->type) yyerror("type not match");
+				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
+					if($1->type == Int_type){
+						$$ = boolConst($1->value.val > $3->value.val);
+						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.val << ">" << $3->value.val<<endl;
+					}else if($1->type == Real_type){
+						$$ = boolConst($1->value.dval > $3->value.dval);
+						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.dval << ">" << $3->value.dval<<endl;
+					}else yyerror("operator error");
+				}
+			}
+		   | expression LE expression
+			{
+				if($1->type != $3->type) yyerror("type not match");
+				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
+					if($1->type == Int_type){
+						$$ = boolConst($1->value.val <= $3->value.val);
+						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.val << "<=" << $3->value.val<<endl;
+					}else if($1->type == Real_type){
+						$$ = boolConst($1->value.dval <= $3->value.dval);
+						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.dval << "<=" << $3->value.dval<<endl;
+					}else yyerror("operator error");
+				}
+			}
+		   | expression GE expression
+			{
+				if($1->type != $3->type) yyerror("type not match");
+				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
+					if($1->type == Int_type){
+						$$ = boolConst($1->value.val >= $3->value.val);
+						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.val << ">=" << $3->value.val<<endl;
+					}else if($1->type == Real_type){
+						$$ = boolConst($1->value.dval >= $3->value.dval);
+						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.dval << ">=" << $3->value.dval<<endl;
+					}else yyerror("operator error");
+				}
+			}
 		   | expression EQ expression
+			{
+				if($1->type != $3->type) yyerror("type not match");
+				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
+					if($1->type == Int_type){
+						$$ = boolConst($1->value.val == $3->value.val);
+						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.val << "==" << $3->value.val<<endl;
+					}else if($1->type == Bool_type){
+						$$ = boolConst($1->value.bval == $3->value.bval);
+						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.bval << "==" << $3->value.bval<<endl;
+					}else if($1->type == Real_type){
+						$$ = boolConst($1->value.dval == $3->value.dval);
+						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.dval << "==" << $3->value.dval<<endl;
+					}else yyerror("operator error");
+				}
+			}
 		   | expression NEQ expression
+			{
+				if($1->type != $3->type) yyerror("type not match");
+				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
+					if($1->type == Int_type){
+						$$ = boolConst($1->value.val != $3->value.val);
+						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.val << "!=" << $3->value.val<<endl;
+					}else if($1->type == Bool_type){
+						$$ = boolConst($1->value.bval != $3->value.bval);
+						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.bval << "!=" << $3->value.bval<<endl;
+					}else if($1->type == Real_type){
+						$$ = boolConst($1->value.dval != $3->value.dval);
+						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.dval << "!=" << $3->value.dval<<endl;
+					}else yyerror("operator error");
+				}
+			}
 		   | '!' expression
+			{
+				if($2->flag == ConstVal_flag){
+					if($2->type == Bool_type){
+						$$ = boolConst(!$2->value.bval);
+						cout << "# " << (($$->value.bval)?"true":"false") << " = " << "!" << $2->value.bval<<endl;
+					}else yyerror("operator error");
+				}
+			}
 		   | expression '&' expression
+			{
+				if($1->type != $3->type) yyerror("type not match");
+				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
+					if($1->type == Int_type){
+						$$ = intConst($1->value.val & $3->value.val);
+						cout << "# " << $$->value.val << " = " << $1->value.val << "&" << $3->value.val<<endl;
+					}else yyerror("operator error");
+				}
+			}
 		   | expression '|' expression
+			{
+				if($1->type != $3->type) yyerror("type not match");
+				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
+					if($1->type == Int_type){
+						$$ = intConst($1->value.val | $3->value.val);
+						cout << "# " << $$->value.val << " = " << $1->value.val << "|" << $3->value.val<<endl;
+					}else yyerror("operator error");
+				}
+			}
 		   | '-' expression %prec UMINUS
+			{
+				if($2->flag == ConstVal_flag){
+					if($2->type == Int_type){
+						$$ = intConst(-$2->value.val);
+						cout << "# " << $$->value.val << " = " << "-" << $2->value.val<<endl;
+					}else if($2->type == Real_type){
+						$$ = realConst(-$2->value.val);
+						cout << "# " << $$->value.val << " = " << "-" << $2->value.dval<<endl;
+					}else yyerror("operator error");
+				}
+			}
 		   | '+' expression %prec UPLUS
+			{
+				if($2->flag == ConstVal_flag){
+					if($2->type == Int_type){
+						$$ = intConst($2->value.val);
+						cout << "# " << $$->value.val << " = " << "+" << $2->value.val<<endl;
+					}else if($2->type == Real_type){
+						$$ = realConst($2->value.val);
+						cout << "# " << $$->value.val << " = " << "+" << $2->value.dval<<endl;
+					}else yyerror("operator error");
+				}
+			}
 		   | '(' expression ')'
+			{
+				$$ = $2;
+			}
 		   ;
 
 
-/*statement: ID '=' expression { printf("%s = %d\n", (*$1).c_str(), $3); }*/
-		 /*| expression 	{ printf("= %d\n", $1); }*/
-		 /*;*/
-/*expression: expression '+' INT_CONST { $$ = $1 + $3; } */
-		  /*| expression '-' INT_CONST { $$ = $1 - $3; }*/
-		  /*| INT_CONST {$$=$1;}*/
-		  /*; */
 %%
-void yyerror(const char *s) {
-	fprintf(stderr, "line %d: %s\n", linenum, s);
+void yyerror(string s) {
+	cerr << "line " << linenum << ": " << s << endl;
 	exit(1);
 }
 
