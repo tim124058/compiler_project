@@ -13,8 +13,7 @@ enum type{
 enum idflag{
 	ConstVal_flag,
 	ConstVar_flag,
-	VarInit_flag,
-	VarNoInit_flag
+	Var_flag,
 };
 
 struct idValue{
@@ -26,7 +25,7 @@ struct idValue{
 };
 
 /*
- * flag : 0->const value, 1->const variable, 2->variable with init value , 3-> variable without init value
+ * flag : 0->const value, 1->const variable, 2->variable
  */
 struct idInfo{
 	int index;
@@ -45,7 +44,7 @@ public:
 	SymbolTable();
 	bool isExist(string);
 	idInfo* lookup(string);
-	int insert(string id, int type, idValue value, int flag);
+	int insert(string var_name, int type, idValue value, int flag);
 	int dump();
 };
 
@@ -58,12 +57,13 @@ public:
 	void pushTable();
 	bool popTable();
 	idInfo* lookup(string);
-	int insertNoInit(string id, int type);
-	int insert(string id, int type, int value, int flag);
-	int insert(string id, int type, bool value, int flag);
-	int insert(string id, int type, double value, int flag);
-	int insert(string id, int type, string value, int flag);
-	int insert(string id, idInfo idinfo);
+	int insertNoInit(string var_name, int type);
+	int insert(string var_name, int type, int value, int flag);
+	int insert(string var_name, int type, bool value, int flag);
+	int insert(string var_name, int type, double value, int flag);
+	int insert(string var_name, int type, string value, int flag);
+	int insert(string var_name, idInfo idinfo);
+	int dump();
 };
 
 // Build const value
@@ -71,3 +71,5 @@ idInfo* intConst(int);
 idInfo* boolConst(bool);
 idInfo* realConst(double);
 idInfo* strConst(string*);
+
+bool isConst(idInfo);
