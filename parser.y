@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include "symbols.hpp"
 #include "lex.yy.cpp"
-#define Trace(t) if (Opt_P) printf(t)
+#define Trace(t) if (Opt_P) cout<<t<<endl;
 using namespace std;
 void yyerror(string s);
 int Opt_P = 1;
@@ -16,6 +16,7 @@ SymbolTableList stl;
 	bool bval; 
 	string* sval;
 	idInfo* idinfo;
+	int type;
 }
 
 /* tokens */
@@ -34,7 +35,8 @@ SymbolTableList stl;
 %token <sval> STR_CONST
 
 /* type declare for non-terminal symbols */
- %type <idinfo> const_value expression
+%type <idinfo> const_value expression
+%type <type> var_type
 
 /* precedence */
 %left '|'
@@ -58,26 +60,33 @@ opt_var_dec: var_dec opt_var_dec
 
 /* declaration constant */
 const_dec: CONST ID '=' expression
-		 {
-			if($4->flag != ConstVal_flag && $4->flag != ConstVar_flag) yyerror("const assign error");
+		{
+			if(!isConst(*$4)) yyerror("ERROR : assign value not constant");
 			$4->flag = ConstVar_flag;
-			if(stl.insert(*$2,*$4) == -1) yyerror("variable redefinition");
-		 }
+			if(stl.insert(*$2,*$4) == -1) yyerror("ERROR : variable redefinition");
+		}
 		 ;
 
 /* declaration variable */
-var_dec: VAR ID var_type opt_assign
+var_dec: VAR ID var_type
+		{
+			if(stl.insertNoInit(*$2,$3) == -1) yyerror("ERROR : variable redefinition");
+		}
+	   | VAR ID var_type '=' expression
+		{
+			if(!isConst(*$5)) yyerror("ERROR : assign value not constant");
+			if($3 != $5->type) yyerror("ERROR : type not match");
+			$5->flag = Var_flag;
+			if(stl.insert(*$2,*$5) == -1) yyerror("ERROR : variable redefinition");
+		}
 	   | VAR ID '[' expression ']' var_type
 	   ;
 
-opt_assign: '=' expression
-		  |
-		  ;
 
-var_type: INT
-		| REAL
-		| STRING
-		| BOOL
+var_type: INT 		{ $$ = Int_type;  }
+		| BOOL 		{ $$ = Bool_type; }
+		| REAL 		{ $$ = Real_type; }
+		| STRING	{ $$ = Str_type;  }
 		;
 
 
@@ -88,7 +97,11 @@ opt_func_dec : func_dec opt_func_dec
 			 |	/* zero or more */
 			 ;
 
-func_dec : FUNC func_type ID {stl.pushTable();} '(' opt_params ')' '{'
+func_dec : FUNC func_type ID 
+			{
+				stl.pushTable();
+			}
+		   '(' opt_params ')' '{'
 			   opt_var_dec
 			   opt_statement
 		   '}' {if(!stl.popTable()) yyerror("pop symbol table error");}
@@ -123,7 +136,6 @@ statement: ID '=' expression
 		 | READ ID
 		 | RETURN
 		 | RETURN expression
-		 | func_invocation
 		 | GO func_invocation
 		 | compound
 		 | conditional
@@ -155,7 +167,7 @@ loop: FOR '(' for_exp  ')'
 	;
 
 for_exp: statement ';' expression ';' statement
-	   | statement ';' expression
+	   | statement ';' expression ';'
 	   | expression ';' statement
 	   | expression
 	   ;
@@ -169,12 +181,10 @@ const_value: INT_CONST { $$=intConst($1); }
 
 expression : ID 
 		   	{
-				idInfo *tmp;
-				tmp = stl.lookup(*$1);
+				idInfo *tmp = stl.lookup(*$1);
 				if(tmp == NULL) yyerror("undeclared identifier " + *$1);
-				if(tmp->flag == ConstVal_flag || tmp->flag == ConstVar_flag){
-					tmp->flag = ConstVal_flag;
-				}
+				//transfar ConstVar_flag to ConstVal_flag
+				if(tmp->flag == ConstVar_flag) tmp->flag = ConstVal_flag;
 				$$ = tmp;
 			}
 		   | const_value
@@ -182,7 +192,8 @@ expression : ID
 		   | func_invocation
 		   | expression '+' expression
 			{
-				if($1->type != $3->type) yyerror("type not match");
+				if($1->type != $3->type) yyerror("ERROR : type not match");
+				if($1->type != Int_type && $1->type != Real_type && $1->type != Str_type) yyerror("operator error");
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = intConst($1->value.val + $3->value.val);
@@ -193,12 +204,17 @@ expression : ID
 					}else if($1->type == Str_type){
 						$$ = strConst(new string($1->value.sval + $3->value.sval));
 						cout << "# " << $$->value.sval << " = " << $1->value.sval << "+" << $3->value.sval<<endl;
-					}else yyerror("operator error");
+					}
+				}else{
+					idInfo *tmp = new idInfo();
+					tmp->flag = Var_flag; tmp->type= $1->type;
+					$$ = tmp;
 				}
 			}
 		   | expression '-' expression
 			{
-				if($1->type != $3->type) yyerror("type not match");
+				if($1->type != $3->type) yyerror("ERROR : type not match");
+				if($1->type != Int_type && $1->type != Real_type) yyerror("operator error");
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = intConst($1->value.val - $3->value.val);
@@ -206,12 +222,17 @@ expression : ID
 					}else if($1->type == Real_type){
 						$$ = realConst($1->value.dval - $3->value.dval);
 						cout << "# " << $$->value.dval << " = " << $1->value.dval << "-" << $3->value.dval<<endl;
-					}else yyerror("operator error");
+					}
+				}else{
+					idInfo *tmp = new idInfo();
+					tmp->flag = Var_flag; tmp->type= $1->type;
+					$$ = tmp;
 				}
 			}
 		   | expression '*' expression
 			{
-				if($1->type != $3->type) yyerror("type not match");
+				if($1->type != $3->type) yyerror("ERROR : type not match");
+				if($1->type != Int_type && $1->type != Real_type) yyerror("operator error");
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = intConst($1->value.val * $3->value.val);
@@ -219,12 +240,17 @@ expression : ID
 					}else if($1->type == Real_type){
 						$$ = realConst($1->value.dval * $3->value.dval);
 						cout << "# " << $$->value.dval << " = " << $1->value.dval << "*" << $3->value.dval<<endl;
-					}else yyerror("operator error");
+					}
+				}else{
+					idInfo *tmp = new idInfo();
+					tmp->flag = Var_flag; tmp->type= $1->type;
+					$$ = tmp;
 				}
 			}
 		   | expression '/' expression
 			{
-				if($1->type != $3->type) yyerror("type not match");
+				if($1->type != $3->type) yyerror("ERROR : type not match");
+				if($1->type != Int_type && $1->type != Real_type) yyerror("operator error");
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = intConst($1->value.val / $3->value.val);
@@ -232,32 +258,47 @@ expression : ID
 					}else if($1->type == Real_type){
 						$$ = realConst($1->value.dval / $3->value.dval);
 						cout << "# " << $$->value.dval << " = " << $1->value.dval << "/" << $3->value.dval<<endl;
-					}else yyerror("operator error");
+					}
+				}else{
+					idInfo *tmp = new idInfo();
+					tmp->flag = Var_flag; tmp->type= $1->type;
+					$$ = tmp;
 				}
 			}
 		   | expression '%' expression
 			{
-				if($1->type != $3->type) yyerror("type not match");
+				if($1->type != $3->type) yyerror("ERROR : type not match");
+				if($1->type != Int_type) yyerror("operator error");
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = intConst($1->value.val % $3->value.val);
 						cout << "# " << $$->value.val << " = " << $1->value.val << "%" << $3->value.val<<endl;
-					}else yyerror("operator error");
+					}
+				}else{
+					idInfo *tmp = new idInfo();
+					tmp->flag = Var_flag; tmp->type= $1->type;
+					$$ = tmp;
 				}
 			}
 		   | expression '^' expression
 			{
-				if($1->type != $3->type) yyerror("type not match");
+				if($1->type != $3->type) yyerror("ERROR : type not match");
+				if($1->type != Int_type) yyerror("operator error");
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = intConst($1->value.val ^ $3->value.val);
 						cout << "# " << $$->value.val << " = " << $1->value.val << "^" << $3->value.val<<endl;
-					}else yyerror("operator error");
+					}
+				}else{
+					idInfo *tmp = new idInfo();
+					tmp->flag = Var_flag; tmp->type= $1->type;
+					$$ = tmp;
 				}
 			}
 		   | expression '<' expression
 			{
-				if($1->type != $3->type) yyerror("type not match");
+				if($1->type != $3->type) yyerror("ERROR : type not match");
+				if($1->type != Int_type && $1->type != Real_type) yyerror("operator error");
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = boolConst($1->value.val < $3->value.val);
@@ -265,12 +306,17 @@ expression : ID
 					}else if($1->type == Real_type){
 						$$ = boolConst($1->value.dval < $3->value.dval);
 						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.dval << "<" << $3->value.dval<<endl;
-					}else yyerror("operator error");
+					}
+				}else{
+					idInfo *tmp = new idInfo();
+					tmp->flag = Var_flag; tmp->type = Bool_type;
+					$$ = tmp;
 				}
 			}
 		   | expression '>' expression
 			{
-				if($1->type != $3->type) yyerror("type not match");
+				if($1->type != $3->type) yyerror("ERROR : type not match");
+				if($1->type != Int_type && $1->type != Real_type) yyerror("operator error");
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = boolConst($1->value.val > $3->value.val);
@@ -278,12 +324,17 @@ expression : ID
 					}else if($1->type == Real_type){
 						$$ = boolConst($1->value.dval > $3->value.dval);
 						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.dval << ">" << $3->value.dval<<endl;
-					}else yyerror("operator error");
+					}
+				}else{
+					idInfo *tmp = new idInfo();
+					tmp->flag = Var_flag; tmp->type = Bool_type;
+					$$ = tmp;
 				}
 			}
 		   | expression LE expression
 			{
-				if($1->type != $3->type) yyerror("type not match");
+				if($1->type != $3->type) yyerror("ERROR : type not match");
+				if($1->type != Int_type && $1->type != Real_type) yyerror("operator error");
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = boolConst($1->value.val <= $3->value.val);
@@ -291,12 +342,17 @@ expression : ID
 					}else if($1->type == Real_type){
 						$$ = boolConst($1->value.dval <= $3->value.dval);
 						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.dval << "<=" << $3->value.dval<<endl;
-					}else yyerror("operator error");
+					}
+				}else{
+					idInfo *tmp = new idInfo();
+					tmp->flag = Var_flag; tmp->type= Bool_type;
+					$$ = tmp;
 				}
 			}
 		   | expression GE expression
 			{
-				if($1->type != $3->type) yyerror("type not match");
+				if($1->type != $3->type) yyerror("ERROR : type not match");
+				if($1->type != Int_type && $1->type != Real_type) yyerror("operator error");
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = boolConst($1->value.val >= $3->value.val);
@@ -304,12 +360,17 @@ expression : ID
 					}else if($1->type == Real_type){
 						$$ = boolConst($1->value.dval >= $3->value.dval);
 						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.dval << ">=" << $3->value.dval<<endl;
-					}else yyerror("operator error");
+					}
+				}else{
+					idInfo *tmp = new idInfo();
+					tmp->flag = Var_flag; tmp->type= Bool_type;
+					$$ = tmp;
 				}
 			}
 		   | expression EQ expression
 			{
-				if($1->type != $3->type) yyerror("type not match");
+				if($1->type != $3->type) yyerror("ERROR : type not match");
+				if($1->type != Int_type && $1->type != Real_type && $1->type != Bool_type) yyerror("operator error");
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = boolConst($1->value.val == $3->value.val);
@@ -320,12 +381,17 @@ expression : ID
 					}else if($1->type == Real_type){
 						$$ = boolConst($1->value.dval == $3->value.dval);
 						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.dval << "==" << $3->value.dval<<endl;
-					}else yyerror("operator error");
+					}
+				}else{
+					idInfo *tmp = new idInfo();
+					tmp->flag = Var_flag; tmp->type= Bool_type;
+					$$ = tmp;
 				}
 			}
 		   | expression NEQ expression
 			{
-				if($1->type != $3->type) yyerror("type not match");
+				if($1->type != $3->type) yyerror("ERROR : type not match");
+				if($1->type != Int_type && $1->type != Real_type && $1->type != Bool_type) yyerror("operator error");
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = boolConst($1->value.val != $3->value.val);
@@ -336,40 +402,59 @@ expression : ID
 					}else if($1->type == Real_type){
 						$$ = boolConst($1->value.dval != $3->value.dval);
 						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.dval << "!=" << $3->value.dval<<endl;
-					}else yyerror("operator error");
+					}
+				}else{
+					idInfo *tmp = new idInfo();
+					tmp->flag = Var_flag; tmp->type= Bool_type;
+					$$ = tmp;
 				}
 			}
 		   | '!' expression
 			{
+				if($2->type != Bool_type) yyerror("operator error");
 				if($2->flag == ConstVal_flag){
-					if($2->type == Bool_type){
-						$$ = boolConst(!$2->value.bval);
-						cout << "# " << (($$->value.bval)?"true":"false") << " = " << "!" << $2->value.bval<<endl;
-					}else yyerror("operator error");
+					$$ = boolConst(!$2->value.bval);
+					cout << "# " << (($$->value.bval)?"true":"false") << " = " << "!" << $2->value.bval<<endl;
+				}else{
+					idInfo *tmp = new idInfo();
+					tmp->flag = Var_flag; tmp->type= Bool_type;
+					$$ = tmp;
 				}
+
 			}
 		   | expression '&' expression
 			{
-				if($1->type != $3->type) yyerror("type not match");
+				if($1->type != $3->type) yyerror("ERROR : type not match");
+				if($1->type != Int_type) yyerror("operator error");
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = intConst($1->value.val & $3->value.val);
 						cout << "# " << $$->value.val << " = " << $1->value.val << "&" << $3->value.val<<endl;
-					}else yyerror("operator error");
+					}
+				}else{
+					idInfo *tmp = new idInfo();
+					tmp->flag = Var_flag; tmp->type= $1->type;
+					$$ = tmp;
 				}
 			}
 		   | expression '|' expression
 			{
-				if($1->type != $3->type) yyerror("type not match");
+				if($1->type != $3->type) yyerror("ERROR : type not match");
+				if($1->type != Int_type) yyerror("operator error");
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = intConst($1->value.val | $3->value.val);
 						cout << "# " << $$->value.val << " = " << $1->value.val << "|" << $3->value.val<<endl;
-					}else yyerror("operator error");
+					}
+				}else{
+					idInfo *tmp = new idInfo();
+					tmp->flag = Var_flag; tmp->type= $1->type;
+					$$ = tmp;
 				}
 			}
 		   | '-' expression %prec UMINUS
 			{
+				if($2->type != Int_type && $2->type != Real_type) yyerror("operator error");
 				if($2->flag == ConstVal_flag){
 					if($2->type == Int_type){
 						$$ = intConst(-$2->value.val);
@@ -377,11 +462,16 @@ expression : ID
 					}else if($2->type == Real_type){
 						$$ = realConst(-$2->value.val);
 						cout << "# " << $$->value.val << " = " << "-" << $2->value.dval<<endl;
-					}else yyerror("operator error");
+					}
+				}else{
+					idInfo *tmp = new idInfo();
+					tmp->flag = Var_flag; tmp->type= $2->type;
+					$$ = tmp;
 				}
 			}
 		   | '+' expression %prec UPLUS
 			{
+				if($2->type != Int_type && $2->type != Real_type) yyerror("operator error");
 				if($2->flag == ConstVal_flag){
 					if($2->type == Int_type){
 						$$ = intConst($2->value.val);
@@ -389,7 +479,11 @@ expression : ID
 					}else if($2->type == Real_type){
 						$$ = realConst($2->value.val);
 						cout << "# " << $$->value.val << " = " << "+" << $2->value.dval<<endl;
-					}else yyerror("operator error");
+					}
+				}else{
+					idInfo *tmp = new idInfo();
+					tmp->flag = Var_flag; tmp->type= $2->type;
+					$$ = tmp;
 				}
 			}
 		   | '(' expression ')'
