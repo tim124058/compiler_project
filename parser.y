@@ -35,8 +35,8 @@ SymbolTableList stl;
 %token <sval> STR_CONST
 
 /* type declare for non-terminal symbols */
-%type <idinfo> const_value expression
-%type <type> var_type
+%type <idinfo> const_value expression func_invocation
+%type <type> var_type func_type
 
 /* precedence */
 %left '|'
@@ -80,6 +80,12 @@ var_dec: VAR ID var_type
 			if(stl.insert(*$2,*$5) == -1) yyerror("ERROR : variable redefinition");
 		}
 	   | VAR ID '[' expression ']' var_type
+		{
+			if(!isConst(*$4)) yyerror("ERROR : array size not constant");
+			if($4->type != Int_type) yyerror("ERROR : array size not integer");
+			if($4->value.val < 1) yyerror("ERROR : array size < 1");
+			if(stl.insertArray(*$2,$6,$4->value.val) == -1) yyerror("ERROR : variable redefinition");
+		}
 	   ;
 
 
@@ -99,18 +105,19 @@ opt_func_dec : func_dec opt_func_dec
 
 func_dec : FUNC func_type ID 
 			{
+				if(stl.insertFunc(*$3,$2) == -1) yyerror("ERROR : function name conflict");
 				stl.pushTable();
 			}
 		   '(' opt_params ')' '{'
 			   opt_var_dec
 			   opt_statement
-		   '}' {if(!stl.popTable()) yyerror("pop symbol table error");}
+		   '}' {stl.dump();if(!stl.popTable()) yyerror("pop symbol table error");}
 
-func_type: INT
-		 | REAL
-		 | STRING
-		 | BOOL
-		 | VOID
+func_type: INT 		{ $$ = Int_type;  }
+		 | BOOL 	{ $$ = Bool_type; }
+		 | REAL 	{ $$ = Real_type; }
+		 | STRING	{ $$ = Str_type;  }
+		 | VOID 	{ $$ = Void_type; }
 		 ;
 
 opt_params : params
@@ -123,6 +130,9 @@ params: params ',' param
 	  ;
 
 param: ID var_type
+		{
+			if(stl.insertNoInit(*$1,$2) == -1) yyerror("ERROR : variable redefinition");
+		}
 	 ;
 
 opt_statement: statement opt_statement
@@ -130,21 +140,50 @@ opt_statement: statement opt_statement
 			 ;
 
 statement: ID '=' expression
+		{
+			idInfo *tmp = stl.lookup(*$1);
+			if(tmp == NULL) yyerror("undeclared identifier " + *$1);
+			if(tmp->flag != Var_flag) yyerror("ERROR : " + *$1 + " not var");
+			if(tmp->type != $3->type) yyerror("ERROR : type not match");
+		}
 		 | ID '[' expression ']' '=' expression
+		{
+			idInfo *tmp = stl.lookup(*$1);
+			if(tmp == NULL) yyerror("undeclared identifier " + *$1);
+			if(tmp->flag != Var_flag) yyerror("ERROR : " + *$1 + " not var");
+			if(tmp->type != Array_type) yyerror("ERROR : " + *$1 + " not array");
+			if($3->type != Int_type) yyerror("ERROR : index not integer");
+			if($3->value.val >= tmp->value.aval.size()) yyerror("ERROR : array index out of range");
+			if(tmp->value.aval[0].type != $6->type) yyerror("ERROR : type not match");
+		}
 		 | PRINT expression
 		 | PRINTLN expression
 		 | READ ID
+		{
+			idInfo *tmp = stl.lookup(*$2);
+			if(tmp == NULL) yyerror("undeclared identifier " + *$2);
+			if(tmp->flag != Var_flag) yyerror("ERROR : " + *$2 + " not var, cannot be set value");
+		}
 		 | RETURN
 		 | RETURN expression
 		 | GO func_invocation
 		 | compound
 		 | conditional
 		 | loop
-		 | expression
 		 ;
 
-func_invocation: ID '(' comma_separated_expression ')'
+func_invocation: ID '(' opt_comma_separated_expression ')'
+				{
+					idInfo *tmp = stl.lookup(*$1);
+					if(tmp == NULL) yyerror("undeclared identifier " + *$1);
+					if(tmp->flag != Func_flag) yyerror("ERROR : " + *$1 + " not function");
+					$$ = tmp;
+				}
 			   ;
+
+opt_comma_separated_expression: comma_separated_expression
+							  |
+							  ;
 
 /* expression <,expression,...,expression>*/
 comma_separated_expression: comma_separated_expression ',' expression
@@ -155,22 +194,31 @@ comma_separated_expression: comma_separated_expression ',' expression
 compound: '{' {stl.pushTable();}
 		   		opt_var_dec
 		   		opt_statement
-		  '}' {if(!stl.popTable()) yyerror("pop symbol table error");}
+		  '}' {stl.dump();if(!stl.popTable()) yyerror("ERROR : pop symbol table error");}
 		;
 
 conditional: IF '(' expression ')' statement
+		    {
+				if($3->type!=Bool_type) yyerror("ERROR : condition not boolean");
+			}
 		   | IF '(' expression ')' statement ELSE statement
+		    {
+				if($3->type!=Bool_type) yyerror("ERROR : condition not boolean");
+			}
 		   ;
 
-loop: FOR '(' for_exp  ')'
+loop: FOR '(' for_left expression for_right ')'
 		statement
 	;
 
-for_exp: statement ';' expression ';' statement
-	   | statement ';' expression ';'
-	   | expression ';' statement
-	   | expression
-	   ;
+for_left: statement ';'
+		| ';'
+		|
+		;
+for_right: ';' statement
+		 | ';'
+		 |
+		 ;
 
 const_value: INT_CONST { $$=intConst($1); }
 		   | BOOL_CONST { $$=boolConst($1); }
@@ -189,6 +237,15 @@ expression : ID
 			}
 		   | const_value
 		   | ID '[' expression ']'
+			{
+				idInfo *tmp = stl.lookup(*$1);
+				if(tmp == NULL) yyerror("undeclared identifier " + *$1);
+				if(tmp->flag != Var_flag) yyerror("ERROR : " + *$1 + " not var");
+				if(tmp->type != Array_type) yyerror("ERROR : " + *$1 + " not array");
+				if($3->type != Int_type) yyerror("ERROR : index not integer");
+				if($3->value.val >= tmp->value.aval.size()) yyerror("ERROR : array index out of range");
+				$$ = tmp;
+			}
 		   | func_invocation
 		   | expression '+' expression
 			{
@@ -197,13 +254,10 @@ expression : ID
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = intConst($1->value.val + $3->value.val);
-						cout << "# " << $$->value.val << " = " << $1->value.val << "+" << $3->value.val<<endl;
 					}else if($1->type == Real_type){
 						$$ = realConst($1->value.dval + $3->value.dval);
-						cout << "# " << $$->value.dval << " = " << $1->value.dval << "+" << $3->value.dval<<endl;
 					}else if($1->type == Str_type){
 						$$ = strConst(new string($1->value.sval + $3->value.sval));
-						cout << "# " << $$->value.sval << " = " << $1->value.sval << "+" << $3->value.sval<<endl;
 					}
 				}else{
 					idInfo *tmp = new idInfo();
@@ -218,10 +272,8 @@ expression : ID
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = intConst($1->value.val - $3->value.val);
-						cout << "# " << $$->value.val << " = " << $1->value.val << "-" << $3->value.val<<endl;
 					}else if($1->type == Real_type){
 						$$ = realConst($1->value.dval - $3->value.dval);
-						cout << "# " << $$->value.dval << " = " << $1->value.dval << "-" << $3->value.dval<<endl;
 					}
 				}else{
 					idInfo *tmp = new idInfo();
@@ -236,10 +288,8 @@ expression : ID
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = intConst($1->value.val * $3->value.val);
-						cout << "# " << $$->value.val << " = " << $1->value.val << "*" << $3->value.val<<endl;
 					}else if($1->type == Real_type){
 						$$ = realConst($1->value.dval * $3->value.dval);
-						cout << "# " << $$->value.dval << " = " << $1->value.dval << "*" << $3->value.dval<<endl;
 					}
 				}else{
 					idInfo *tmp = new idInfo();
@@ -254,10 +304,8 @@ expression : ID
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = intConst($1->value.val / $3->value.val);
-						cout << "# " << $$->value.val << " = " << $1->value.val << "/" << $3->value.val<<endl;
 					}else if($1->type == Real_type){
 						$$ = realConst($1->value.dval / $3->value.dval);
-						cout << "# " << $$->value.dval << " = " << $1->value.dval << "/" << $3->value.dval<<endl;
 					}
 				}else{
 					idInfo *tmp = new idInfo();
@@ -272,7 +320,6 @@ expression : ID
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = intConst($1->value.val % $3->value.val);
-						cout << "# " << $$->value.val << " = " << $1->value.val << "%" << $3->value.val<<endl;
 					}
 				}else{
 					idInfo *tmp = new idInfo();
@@ -287,7 +334,6 @@ expression : ID
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = intConst($1->value.val ^ $3->value.val);
-						cout << "# " << $$->value.val << " = " << $1->value.val << "^" << $3->value.val<<endl;
 					}
 				}else{
 					idInfo *tmp = new idInfo();
@@ -302,10 +348,8 @@ expression : ID
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = boolConst($1->value.val < $3->value.val);
-						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.val << "<" << $3->value.val<<endl;
 					}else if($1->type == Real_type){
 						$$ = boolConst($1->value.dval < $3->value.dval);
-						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.dval << "<" << $3->value.dval<<endl;
 					}
 				}else{
 					idInfo *tmp = new idInfo();
@@ -320,10 +364,8 @@ expression : ID
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = boolConst($1->value.val > $3->value.val);
-						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.val << ">" << $3->value.val<<endl;
 					}else if($1->type == Real_type){
 						$$ = boolConst($1->value.dval > $3->value.dval);
-						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.dval << ">" << $3->value.dval<<endl;
 					}
 				}else{
 					idInfo *tmp = new idInfo();
@@ -338,10 +380,8 @@ expression : ID
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = boolConst($1->value.val <= $3->value.val);
-						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.val << "<=" << $3->value.val<<endl;
 					}else if($1->type == Real_type){
 						$$ = boolConst($1->value.dval <= $3->value.dval);
-						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.dval << "<=" << $3->value.dval<<endl;
 					}
 				}else{
 					idInfo *tmp = new idInfo();
@@ -356,10 +396,8 @@ expression : ID
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = boolConst($1->value.val >= $3->value.val);
-						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.val << ">=" << $3->value.val<<endl;
 					}else if($1->type == Real_type){
 						$$ = boolConst($1->value.dval >= $3->value.dval);
-						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.dval << ">=" << $3->value.dval<<endl;
 					}
 				}else{
 					idInfo *tmp = new idInfo();
@@ -374,13 +412,10 @@ expression : ID
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = boolConst($1->value.val == $3->value.val);
-						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.val << "==" << $3->value.val<<endl;
 					}else if($1->type == Bool_type){
 						$$ = boolConst($1->value.bval == $3->value.bval);
-						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.bval << "==" << $3->value.bval<<endl;
 					}else if($1->type == Real_type){
 						$$ = boolConst($1->value.dval == $3->value.dval);
-						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.dval << "==" << $3->value.dval<<endl;
 					}
 				}else{
 					idInfo *tmp = new idInfo();
@@ -395,13 +430,10 @@ expression : ID
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = boolConst($1->value.val != $3->value.val);
-						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.val << "!=" << $3->value.val<<endl;
 					}else if($1->type == Bool_type){
 						$$ = boolConst($1->value.bval != $3->value.bval);
-						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.bval << "!=" << $3->value.bval<<endl;
 					}else if($1->type == Real_type){
 						$$ = boolConst($1->value.dval != $3->value.dval);
-						cout << "# " << (($$->value.bval)?"true":"false") << " = " << $1->value.dval << "!=" << $3->value.dval<<endl;
 					}
 				}else{
 					idInfo *tmp = new idInfo();
@@ -414,7 +446,6 @@ expression : ID
 				if($2->type != Bool_type) yyerror("operator error");
 				if($2->flag == ConstVal_flag){
 					$$ = boolConst(!$2->value.bval);
-					cout << "# " << (($$->value.bval)?"true":"false") << " = " << "!" << $2->value.bval<<endl;
 				}else{
 					idInfo *tmp = new idInfo();
 					tmp->flag = Var_flag; tmp->type= Bool_type;
@@ -429,7 +460,6 @@ expression : ID
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = intConst($1->value.val & $3->value.val);
-						cout << "# " << $$->value.val << " = " << $1->value.val << "&" << $3->value.val<<endl;
 					}
 				}else{
 					idInfo *tmp = new idInfo();
@@ -444,7 +474,6 @@ expression : ID
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
 						$$ = intConst($1->value.val | $3->value.val);
-						cout << "# " << $$->value.val << " = " << $1->value.val << "|" << $3->value.val<<endl;
 					}
 				}else{
 					idInfo *tmp = new idInfo();
@@ -458,10 +487,8 @@ expression : ID
 				if($2->flag == ConstVal_flag){
 					if($2->type == Int_type){
 						$$ = intConst(-$2->value.val);
-						cout << "# " << $$->value.val << " = " << "-" << $2->value.val<<endl;
 					}else if($2->type == Real_type){
 						$$ = realConst(-$2->value.val);
-						cout << "# " << $$->value.val << " = " << "-" << $2->value.dval<<endl;
 					}
 				}else{
 					idInfo *tmp = new idInfo();
@@ -475,10 +502,8 @@ expression : ID
 				if($2->flag == ConstVal_flag){
 					if($2->type == Int_type){
 						$$ = intConst($2->value.val);
-						cout << "# " << $$->value.val << " = " << "+" << $2->value.val<<endl;
 					}else if($2->type == Real_type){
 						$$ = realConst($2->value.val);
-						cout << "# " << $$->value.val << " = " << "+" << $2->value.dval<<endl;
 					}
 				}else{
 					idInfo *tmp = new idInfo();

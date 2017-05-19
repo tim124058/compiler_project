@@ -8,19 +8,24 @@ enum type{
 	Int_type,
 	Bool_type,
 	Real_type,
-	Str_type
+	Str_type,
+	Array_type,
+	Void_type
 };
 enum idflag{
 	ConstVal_flag,
 	ConstVar_flag,
 	Var_flag,
+	Func_flag
 };
 
+struct idInfo;
 struct idValue{
 	int val;
 	bool bval; 
 	double dval;
 	string sval;
+	vector<idInfo> aval;
 	idValue();
 };
 
@@ -58,6 +63,8 @@ public:
 	bool popTable();
 	idInfo* lookup(string);
 	int insertNoInit(string var_name, int type);
+	int insertArray(string var_name, int type, int size);
+	int insertFunc(string var_name, int type);
 	int insert(string var_name, int type, int value, int flag);
 	int insert(string var_name, int type, bool value, int flag);
 	int insert(string var_name, int type, double value, int flag);
