@@ -49,63 +49,7 @@ int SymbolTable::insert(string var_name, int type, idValue value, int flag){
 	return index-1;
 }
 
-string getTypeStr(int type){
-		switch(type){
-			case Int_type:
-				return "int";
-			case Bool_type:
-				return "bool";
-			case Real_type:
-				return "real";
-			case Str_type:
-				return "string";
-			case Array_type:
-				return "array";
-			case Void_type:
-				return "void";
-			default:
-				return "ERROR!!!\n";
-		}
-}
-
-string getValue(idValue value, int type){
-		switch(type){
-			case Int_type:
-				return to_string(value.val);
-			case Bool_type:
-				return (value.bval?"true":"false");
-			case Real_type:
-				return to_string(value.dval);
-			case Str_type:
-				return value.sval;
-			case Array_type:
-				return to_string(value.aval.size());
-			default:
-				return "ERROR!!!\n";
-		}
-}
-
-// return idInfo string with declare format
-string getIdInfoStr(string name, idInfo tmp){
-	string s = "";
-	switch (tmp.flag) {
-		case ConstVar_flag:
-			s += "const";break;
-		case Var_flag:
-			s += "var";break;
-		case Func_flag:
-			s += "func "+ getTypeStr(tmp.type) + " " + name;return s;
-		default:
-			return "ERROR!!!";
-	}
-	s+= " " + name + " ";
-	if(tmp.type==Array_type){
-		s +=  "[" + getValue(tmp.value,tmp.type)  + "]" + getTypeStr(tmp.value.aval[0].type);
-	}else
-		s += getTypeStr(tmp.type) + " = " + getValue(tmp.value,tmp.type);
-	return s;
-}
-
+/* dump */
 int SymbolTable::dump(){
 	for(int i=0;i<index;i++){
 		idInfo tmp = symbol_i[i_symbol[i]];
@@ -140,7 +84,7 @@ bool SymbolTableList::popTable(){
 	return true;
 }
 
-// get s info from SymbolTableList
+// get s idInfo from SymbolTableList
 // search s from top to 0
 idInfo* SymbolTableList::lookup(string s){
 	for(int i=top;i>=0;i--){
@@ -152,6 +96,7 @@ idInfo* SymbolTableList::lookup(string s){
 }
 
 
+/* INSERT */
 int SymbolTableList::insertNoInit(string var_name, int type){
 	return list[top].insert(var_name,type,idValue(), Var_flag);
 }
@@ -168,43 +113,25 @@ int SymbolTableList::insertArray(string var_name, int type, int size){
 int SymbolTableList::insertFunc(string var_name, int type){
 	return list[top].insert(var_name,type,idValue(), Func_flag);
 }
-int SymbolTableList::insert(string var_name, int type, int value, int flag){
-	idValue tmp;
-	tmp.val = value;
-	return list[top].insert(var_name,type,tmp,flag);
-}
-int SymbolTableList::insert(string var_name, int type, bool value, int flag){
-	idValue tmp;
-	tmp.bval = value;
-	return list[top].insert(var_name,type,tmp,flag);
-}
-int SymbolTableList::insert(string var_name, int type, double value, int flag){
-	idValue tmp;
-	tmp.dval = value;
-	return list[top].insert(var_name,type,tmp,flag);
-}
-int SymbolTableList::insert(string var_name, int type, string value, int flag){
-	idValue tmp;
-	tmp.sval = value;
-	return list[top].insert(var_name,type,tmp,flag);
-}
 
 int SymbolTableList::insert(string var_name, idInfo idinfo){
 	return list[top].insert(var_name,idinfo.type,idinfo.value,idinfo.flag);
 }
 
+
+/* dump */
 int SymbolTableList::dump(){
 	cout << "-------------- dump start --------------" << endl;
 	for(int i=top;i>=0;i--){
 		cout << "stack frame : " << i << endl;
 		list[i].dump();
 	}
-	cout << "-------------- dump end --------------" << endl;
+	cout << "--------------  dump end  --------------" << endl;
 	return list.size();
 }
 
 
-// Build const value
+/* Build const value */
 idInfo* intConst(int val){
 	idInfo* tmp = new idInfo();
 	tmp->index=0;
@@ -245,3 +172,63 @@ bool isConst(idInfo idinfo){
 	else 
 		return true;
 }
+
+// transfar type enum to type name
+string getTypeStr(int type){
+		switch(type){
+			case Int_type:
+				return "int";
+			case Bool_type:
+				return "bool";
+			case Real_type:
+				return "real";
+			case Str_type:
+				return "string";
+			case Array_type:
+				return "array";
+			case Void_type:
+				return "void";
+			default:
+				return "ERROR!!!\n";
+		}
+}
+
+// use type to get idValue value
+string getValue(idValue value, int type){
+		switch(type){
+			case Int_type:
+				return to_string(value.val);
+			case Bool_type:
+				return (value.bval?"true":"false");
+			case Real_type:
+				return to_string(value.dval);
+			case Str_type:
+				return value.sval;
+			case Array_type:
+				return to_string(value.aval.size());
+			default:
+				return "ERROR!!!\n";
+		}
+}
+
+// return idInfo format string(declartion format)
+string getIdInfoStr(string name, idInfo tmp){
+	string s = "";
+	switch (tmp.flag) {
+		case ConstVar_flag:
+			s += "const";break;
+		case Var_flag:
+			s += "var";break;
+		case Func_flag:
+			s += "func "+ getTypeStr(tmp.type) + " " + name;return s;
+		default:
+			return "ERROR!!!";
+	}
+	s+= " " + name + " ";
+	if(tmp.type==Array_type){
+		s +=  "[" + getValue(tmp.value,tmp.type)  + "]" + getTypeStr(tmp.value.aval[0].type);
+	}else
+		s += getTypeStr(tmp.type) + " = " + getValue(tmp.value,tmp.type);
+	return s;
+}
+

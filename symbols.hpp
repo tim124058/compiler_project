@@ -13,64 +13,65 @@ enum type{
 	Void_type
 };
 enum idflag{
-	ConstVal_flag,
-	ConstVar_flag,
-	Var_flag,
-	Func_flag
+	ConstVal_flag,				// const value (123)
+	ConstVar_flag,				// const variable (const a=123)
+	Var_flag,					// variable
+	Func_flag					// function
 };
 
 struct idInfo;
 struct idValue{
-	int val;
-	bool bval; 
-	double dval;
-	string sval;
-	vector<idInfo> aval;
+	int val;					// integer
+	bool bval; 					// boolean
+	double dval;				// real
+	string sval;				// string
+	vector<idInfo> aval;		// array
 	idValue();
 };
 
-/*
- * flag : 0->const value, 1->const variable, 2->variable
- */
+/* store constant or variable or function information */
 struct idInfo{
 	int index;
-	int type;
-	idValue value;
-	int flag;
+	int type;		// enum type
+	idValue value;	// value depend on type
+	int flag;		// enum idflag
 	idInfo();
 };
 
+/* symbol table */
 class SymbolTable{
 private:
-	vector<string> i_symbol;
-	map<string,idInfo> symbol_i;
+	vector<string> i_symbol;			// use index to get variable name
+	map<string,idInfo> symbol_i;		// use variable name get ifInfo
 	int index;
 public:
 	SymbolTable();
-	bool isExist(string);
-	idInfo* lookup(string);
-	int insert(string var_name, int type, idValue value, int flag);
-	int dump();
+	bool isExist(string);				// check variable in the SymbolTable
+	idInfo* lookup(string);				// return idInfo if variable in the SymbolTable (else return NULL)
+	int insert(string var_name, int type, idValue value, int flag);		// insert var into the SymbolTable
+	int dump();							// dump the SymbolTable
 };
 
+/* 	symbol table list
+ *  use a stack to implement variable scope
+ */
 class SymbolTableList{
 private:
-	int top;
-	vector<SymbolTable> list;
+	int top;						// top of stack
+	vector<SymbolTable> list;		// SymbolTable list
 public:
 	SymbolTableList();
-	void pushTable();
-	bool popTable();
-	idInfo* lookup(string);
+	void pushTable();				// push a SymbolTable into list
+	bool popTable();				// pop a SymbolTable from list
+	idInfo* lookup(string);			// lookup all SymbolTable from list (from top to 0)
+	
+	/* insert a variable into the SymbolTable(current scope) */
 	int insertNoInit(string var_name, int type);
 	int insertArray(string var_name, int type, int size);
 	int insertFunc(string var_name, int type);
-	int insert(string var_name, int type, int value, int flag);
-	int insert(string var_name, int type, bool value, int flag);
-	int insert(string var_name, int type, double value, int flag);
-	int insert(string var_name, int type, string value, int flag);
-	int insert(string var_name, idInfo idinfo);
-	int dump();
+	int insert(string var_name, idInfo idinfo);		// use name and idInfo
+
+	int dump();						// dump all SymbolTable (from top to 0)
 };
 
 // Build const value
@@ -79,4 +80,8 @@ idInfo* boolConst(bool);
 idInfo* realConst(double);
 idInfo* strConst(string*);
 
+// check the idInfo is a const
 bool isConst(idInfo);
+
+// return idInfo format string(declartion format)
+string getIdInfoStr(string name, idInfo tmp);
