@@ -22,7 +22,7 @@ SymbolTableList stl;
 /* tokens */
 
 /* Operator : length > one char */
-%token LE GE EQ NEQ ADDA SUBA MULA DIVA
+%token LE GE EQ NEQ ADDA SUBA MULA DIVA AND OR
 
 /* keywords */
 %token BREAK CASE CONTINUE DEFAULT ELSE FOR FUNC GO IF IMPORT NIL PRINT PRINTLN RETURN STRUCT SWITCH TYPE VAR WHILE READ
@@ -39,13 +39,13 @@ SymbolTableList stl;
 %type <type> var_type func_type
 
 /* precedence */
-%left '|'
-%left '&'
+%left OR
+%left AND
 %left '!'
 %left '<' '>' LE GE EQ NEQ
-%left '+' '-'
-%left '*' '/' '%'
-%left '^'
+%left '+' '-' '|' '^'
+%left '*' '/' '%' '&'
+/*%left '^'*/
 %nonassoc UMINUS UPLUS
 
 %%
@@ -434,6 +434,34 @@ expression : ID
 						$$ = boolConst($1->value.bval != $3->value.bval);
 					}else if($1->type == Real_type){
 						$$ = boolConst($1->value.dval != $3->value.dval);
+					}
+				}else{
+					idInfo *tmp = new idInfo();
+					tmp->flag = Var_flag; tmp->type= Bool_type;
+					$$ = tmp;
+				}
+			}
+		   | expression AND expression
+			{
+				if($1->type != $3->type) yyerror("ERROR : type not match");
+				if($1->type != Bool_type) yyerror("operator error");
+				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
+					if($1->type == Bool_type){
+						$$ = boolConst($1->value.bval && $3->value.bval);
+					}
+				}else{
+					idInfo *tmp = new idInfo();
+					tmp->flag = Var_flag; tmp->type= Bool_type;
+					$$ = tmp;
+				}
+			}
+		   | expression OR expression
+			{
+				if($1->type != $3->type) yyerror("ERROR : type not match");
+				if($1->type != Bool_type) yyerror("operator error");
+				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
+					if($1->type == Bool_type){
+						$$ = boolConst($1->value.bval || $3->value.bval);
 					}
 				}else{
 					idInfo *tmp = new idInfo();

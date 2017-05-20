@@ -60,6 +60,8 @@ integer {digit}+
 "|" {token('|'); return yytext[0];}
 "!" {token('!'); return yytext[0];}
 "=" {token('='); return yytext[0];}
+"&&" {token('&&'); return AND;}
+"||" {token('||'); return OR;}
 
 "+=" {token('+='); return ADDA;}
 "-=" {token('-='); return SUBA;}
