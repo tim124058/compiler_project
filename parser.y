@@ -48,7 +48,8 @@ SymbolTableList stl;
 %left '*' '/' '%' '&'
 /*%left '^'*/
 %nonassoc UMINUS UPLUS
-
+%nonassoc A
+%nonassoc B
 %%
 /* program */
 program: opt_var_dec opt_func_dec ;
@@ -227,16 +228,22 @@ conditional: IF '(' expression ')' statement
 			}
 		   ;
 
-loop: FOR '(' for_left expression for_right ')' statement
+loop: FOR '(' for_left_exp for_right ')' statement
 	{
 		Trace("for");
 	}
 	;
 
-for_left: statement ';'
-		| ';'
-		|
+for_left_exp: statement ';' for_exp
+		| ';' for_exp
+		| for_exp
 		;
+for_exp : expression
+		{
+			if($1->type!=Bool_type) yyerror("ERROR : for condition not boolean");
+		}
+		;
+
 for_right: ';' statement
 		 | ';'
 		 |
