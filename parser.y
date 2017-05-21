@@ -10,6 +10,7 @@ int Opt_P = 0;		// print trace message
 int Opt_DS = 1;		// dump symboltable when function or compound parse finished
 SymbolTableList stl;
 vector<idInfo> *funcparam;
+int mainFunc = 0;
 %}
 /* type */
 %union {
@@ -51,7 +52,11 @@ vector<idInfo> *funcparam;
 %nonassoc UMINUS UPLUS
 %%
 /* program */
-program: opt_var_dec opt_func_dec ;
+program: opt_var_dec opt_func_dec
+		{
+			if(mainFunc==0) cerr << "WARRING : main function not found"<< endl;
+		}
+	   ;
 
 /* optional variable and constant declarations */
 opt_var_dec: var_dec opt_var_dec
@@ -114,6 +119,7 @@ func_dec : FUNC func_type ID
 			{
 				Trace("declare function");
 				if(stl.insertFunc(*$3,$2) == -1) yyerror("ERROR : function name conflict");
+				if(*$3 == "main") mainFunc = 1;
 				stl.pushTable();
 			}
 		   '(' opt_params ')' '{'
