@@ -36,12 +36,20 @@ idInfo* SymbolTable::lookup(string s){
 		return NULL;
 }
 
+idInfo* SymbolTable::getIdInfoPtr(string s){
+	if(isExist(s))
+		return &symbol_i[s];
+	else
+		return NULL;
+}
+
 int SymbolTable::insert(string var_name, int type, idValue value, int flag){
 	if(symbol_i.find(var_name) != symbol_i.end()){
 		return -1;		// find it in SymbolTable
 	}
 	i_symbol.push_back(var_name);
 	symbol_i[var_name].index = index;
+	symbol_i[var_name].name = var_name;
 	symbol_i[var_name].type = type;
 	symbol_i[var_name].value = value;
 	symbol_i[var_name].flag = flag;
@@ -53,7 +61,7 @@ int SymbolTable::insert(string var_name, int type, idValue value, int flag){
 int SymbolTable::dump(){
 	for(int i=0;i<index;i++){
 		idInfo tmp = symbol_i[i_symbol[i]];
-		cout << i << ". " << getIdInfoStr(i_symbol[i], tmp) << endl;
+		cout << i << ". " << getIdInfoStr(tmp) << endl;
 	}
 	return i_symbol.size();
 }
@@ -111,6 +119,7 @@ int SymbolTableList::insertArray(string var_name, int type, int size){
 	return list[top].insert(var_name,Array_type,tmp, Var_flag);
 }
 int SymbolTableList::insertFunc(string var_name, int type){
+	funcname = var_name;
 	return list[top].insert(var_name,type,idValue(), Func_flag);
 }
 
@@ -118,6 +127,17 @@ int SymbolTableList::insert(string var_name, idInfo idinfo){
 	return list[top].insert(var_name,idinfo.type,idinfo.value,idinfo.flag);
 }
 
+// set function parameters
+bool SymbolTableList::setFuncParam(string name,int type){
+	idInfo *f = list[top-1].getIdInfoPtr(funcname);
+	if(f == NULL) return false;
+	idInfo tmp;
+	tmp.name = name;
+	tmp.type = type;
+	tmp.flag = Var_flag;
+	f->value.aval.push_back(tmp);
+	return true;
+}
 
 /* dump */
 int SymbolTableList::dump(){
@@ -203,7 +223,7 @@ string getValue(idValue value, int type){
 			case Real_type:
 				return to_string(value.dval);
 			case Str_type:
-				return value.sval;
+				return "\"" + value.sval + "\"";
 			case Array_type:
 				return to_string(value.aval.size());
 			default:
@@ -211,8 +231,23 @@ string getValue(idValue value, int type){
 		}
 }
 
+// get function parameter string
+string getParamStr(vector<idInfo> param){
+	string s = "";
+	for(int i = 0;i<param.size();i++){
+		if(i!=0) s+=", ";
+		s+= param[i].name + " " + getTypeStr(param[i].type);
+	}
+	return s;
+}
+// get function format string(declartion format)
+string getFuncStr(idInfo tmp){
+	if(tmp.flag != Func_flag) return "ERROR";
+	return "func "+ getTypeStr(tmp.type) + " " + tmp.name + "(" + getParamStr(tmp.value.aval) + ")";
+}
+
 // return idInfo format string(declartion format)
-string getIdInfoStr(string name, idInfo tmp){
+string getIdInfoStr(idInfo tmp){
 	string s = "";
 	switch (tmp.flag) {
 		case ConstVar_flag:
@@ -220,11 +255,11 @@ string getIdInfoStr(string name, idInfo tmp){
 		case Var_flag:
 			s += "var";break;
 		case Func_flag:
-			s += "func "+ getTypeStr(tmp.type) + " " + name;return s;
+			s += getFuncStr(tmp);return s;
 		default:
 			return "ERROR!!!";
 	}
-	s+= " " + name + " ";
+	s+= " " + tmp.name + " ";
 	if(tmp.type==Array_type){
 		s +=  "[" + getValue(tmp.value,tmp.type)  + "]" + getTypeStr(tmp.value.aval[0].type);
 	}else

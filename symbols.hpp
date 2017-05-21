@@ -25,13 +25,14 @@ struct idValue{
 	bool bval; 					// boolean
 	double dval;				// real
 	string sval;				// string
-	vector<idInfo> aval;		// array
+	vector<idInfo> aval;		// array and function parameters
 	idValue();
 };
 
 /* store constant or variable or function information */
 struct idInfo{
 	int index;
+	string name;	// id name
 	int type;		// enum type
 	idValue value;	// value depend on type
 	int flag;		// enum idflag
@@ -47,7 +48,8 @@ private:
 public:
 	SymbolTable();
 	bool isExist(string);				// check variable in the SymbolTable
-	idInfo* lookup(string);				// return idInfo if variable in the SymbolTable (else return NULL)
+	idInfo* lookup(string);				// return Copied idInfo if variable in the SymbolTable (else return NULL)
+	idInfo* getIdInfoPtr(string);		// return idInfo pointer if variable in the SymbolTable (else return NULL)
 	int insert(string var_name, int type, idValue value, int flag);		// insert var into the SymbolTable
 	int dump();							// dump the SymbolTable
 };
@@ -59,6 +61,7 @@ class SymbolTableList{
 private:
 	int top;						// top of stack
 	vector<SymbolTable> list;		// SymbolTable list
+	string funcname;				// current function name
 public:
 	SymbolTableList();
 	void pushTable();				// push a SymbolTable into list
@@ -68,8 +71,10 @@ public:
 	/* insert a variable into the SymbolTable(current scope) */
 	int insertNoInit(string var_name, int type);
 	int insertArray(string var_name, int type, int size);
-	int insertFunc(string var_name, int type);
+	int insertFunc(string var_name, int type);		// insert a function and start to set function parameter
 	int insert(string var_name, idInfo idinfo);		// use name and idInfo
+
+	bool setFuncParam(string,int);	// set function parameters
 
 	int dump();						// dump all SymbolTable (from top to 0)
 };
@@ -83,5 +88,11 @@ idInfo* strConst(string*);
 // check the idInfo is a const
 bool isConst(idInfo);
 
+// transfar type enum to type name
+string getTypeStr(int type);
+// use type to get idValue value
+string getValue(idValue value, int type);
+// get function format string(declartion format)
+string getFuncStr(idInfo);
 // return idInfo format string(declartion format)
-string getIdInfoStr(string name, idInfo tmp);
+string getIdInfoStr(idInfo);

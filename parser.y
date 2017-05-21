@@ -9,6 +9,7 @@ void yyerror(string s);
 int Opt_P = 0;		// print trace message
 int Opt_DS = 1;		// dump symboltable when function or compound parse finished
 SymbolTableList stl;
+vector<idInfo> *funcparam;
 %}
 /* type */
 %union {
@@ -48,8 +49,6 @@ SymbolTableList stl;
 %left '*' '/' '%' '&'
 /*%left '^'*/
 %nonassoc UMINUS UPLUS
-%nonassoc A
-%nonassoc B
 %%
 /* program */
 program: opt_var_dec opt_func_dec ;
@@ -121,6 +120,7 @@ func_dec : FUNC func_type ID
 			   opt_var_dec
 			   opt_statement
 		   '}' {if(Opt_DS)stl.dump();if(!stl.popTable()) yyerror("pop symbol table error");}
+			;
 
 /* type of function*/
 func_type: INT 		{ $$ = Int_type;  }
@@ -143,6 +143,7 @@ params: params ',' param
 param: ID var_type
 		{
 			if(stl.insertNoInit(*$1,$2) == -1) yyerror("ERROR : variable redefinition");
+			if(!stl.setFuncParam(*$1,$2)) yyerror("ERROR : set function parameter error");
 		}
 	 ;
 
@@ -188,12 +189,22 @@ statement: ID '=' expression
 		 ;
 
 /* function invocation */
-func_invocation: ID '(' opt_comma_separated_expression ')'
+func_invocation: ID
+				{
+					funcparam = new vector<idInfo>();
+				}
+				 '(' opt_comma_separated_expression ')'
 				{
 					Trace("call function");
 					idInfo *tmp = stl.lookup(*$1);
 					if(tmp == NULL) yyerror("undeclared identifier " + *$1);
 					if(tmp->flag != Func_flag) yyerror("ERROR : " + *$1 + " not function");
+					vector<idInfo> tmpArr = tmp->value.aval;
+					if(tmpArr.size() != funcparam->size()) yyerror("ERROR : function parameter size not match");
+					for(int i= 0;i<tmpArr.size();i++){
+						if(tmpArr[i].type != funcparam->at(i).type) yyerror("ERROR : function parameter type not match");
+					}
+					delete funcparam;funcparam = NULL;
 					$$ = tmp;
 				}
 			   ;
@@ -204,10 +215,15 @@ opt_comma_separated_expression: comma_separated_expression
 							  ;
 
 /* expression <,expression,...,expression>*/
-comma_separated_expression: comma_separated_expression ',' expression
-						  | expression
+comma_separated_expression: comma_separated_expression ',' func_expression
+						  | func_expression
 						  ;
 
+func_expression: expression
+				{
+					funcparam->push_back(*$1);
+				}
+			   ;
 
 /* compound */
 compound: '{' {stl.pushTable();}
