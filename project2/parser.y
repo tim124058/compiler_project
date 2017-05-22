@@ -1,6 +1,7 @@
 %{
 #include <iostream>
 #include <stdio.h>
+#include <cmath>
 #include "symbols.hpp"
 #include "lex.yy.cpp"
 #define Trace(t) if (Opt_P) cout<<"TRACE => "<<t<<endl;
@@ -46,9 +47,9 @@ int mainFunc = 0;
 %left AND
 %left '!'
 %left '<' '>' LE GE EQ NEQ
-%left '+' '-' '|' '^'
+%left '+' '-' '|'
 %left '*' '/' '%' '&'
-/*%left '^'*/
+%left '^'
 %nonassoc UMINUS UPLUS
 %%
 /* program */
@@ -296,7 +297,7 @@ expression : ID
 				if(tmp->type != Array_type) yyerror("ERROR : " + *$1 + " not array");
 				if($3->type != Int_type) yyerror("ERROR : index not integer");
 				if($3->value.val >= tmp->value.aval.size()) yyerror("ERROR : array index out of range");
-				$$ = tmp;
+				$$ = new idInfo(tmp->value.aval[$3->value.val]);
 			}
 		   | func_invocation
 		   | expression '+' expression
@@ -392,10 +393,12 @@ expression : ID
 			{
 				Trace("expression ^ expression")
 				if($1->type != $3->type) yyerror("ERROR : type not match");
-				if($1->type != Int_type) yyerror("operator error");
+				if($1->type != Int_type && $1->type != Real_type) yyerror("operator error");
 				if($1->flag == ConstVal_flag && $1->flag==$3->flag){
 					if($1->type == Int_type){
-						$$ = intConst($1->value.val ^ $3->value.val);
+						$$ = intConst(pow($1->value.val, $3->value.val));
+					}else if($1->type == Real_type){
+						$$ = realConst(pow($1->value.dval, $3->value.dval));
 					}
 				}else{
 					idInfo *tmp = new idInfo();
