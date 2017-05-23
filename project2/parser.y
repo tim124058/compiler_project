@@ -10,7 +10,7 @@ void yyerror(string s);
 int Opt_P = 0;		// print trace message
 int Opt_DS = 1;		// dump symboltable when function or compound parse finished
 SymbolTableList stl;
-vector<idInfo> *funcparam;
+vector<vector<idInfo>> fpstack;
 int mainFunc = 0;
 %}
 /* type */
@@ -198,7 +198,7 @@ statement: ID '=' expression
 /* function invocation */
 func_invocation: ID
 				{
-					funcparam = new vector<idInfo>();
+					fpstack.push_back(vector<idInfo>());
 				}
 				 '(' opt_comma_separated_expression ')'
 				{
@@ -207,12 +207,12 @@ func_invocation: ID
 					if(tmp == NULL) yyerror("undeclared identifier " + *$1);
 					if(tmp->flag != Func_flag) yyerror("ERROR : " + *$1 + " not function");
 					vector<idInfo> tmpArr = tmp->value.aval;
-					if(tmpArr.size() != funcparam->size()) yyerror("ERROR : function parameter size not match");
+					if(tmpArr.size() != fpstack[fpstack.size()-1].size()) yyerror("ERROR : function parameter size not match");
 					for(int i= 0;i<tmpArr.size();i++){
-						if(tmpArr[i].type != funcparam->at(i).type) yyerror("ERROR : function parameter type not match");
+						if(tmpArr[i].type != fpstack[fpstack.size()-1].at(i).type) yyerror("ERROR : function parameter type not match");
 					}
-					delete funcparam;funcparam = NULL;
 					$$ = tmp;
+					fpstack.pop_back();
 				}
 			   ;
 
@@ -228,7 +228,7 @@ comma_separated_expression: comma_separated_expression ',' func_expression
 
 func_expression: expression
 				{
-					funcparam->push_back(*$1);
+					fpstack[fpstack.size()-1].push_back(*$1);
 				}
 			   ;
 
