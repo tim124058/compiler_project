@@ -98,7 +98,6 @@ var_dec: VAR ID var_type
 				int index = stl.getIndex(*$2);
 				if(index == -1){		// global
 					genGlobalVarNoInit(*$2);
-				}else if(index >= 0){	// local
 				}
 			}
 		}
@@ -115,7 +114,7 @@ var_dec: VAR ID var_type
 				if(index == -1){		// global
 					genGlobalVar(*$2,value);
 				}else if(index >= 0){	// local
-					genSetLocalVar(index, value);
+					genLocalVar(index, value);
 				}
 			}
 		}
@@ -212,6 +211,15 @@ statement: ID '=' expression
 			if(tmp == NULL) yyerror("undeclared identifier " + *$1);
 			if(tmp->flag != Var_flag) yyerror("ERROR : " + *$1 + " not var");
 			if(tmp->type != $3->type) yyerror("ERROR : type not match");
+
+			if(tmp->type == Int_type || tmp->type == Bool_type){
+				int index = stl.getIndex(*$1);
+				if(index == -1){		// global
+					genSetGlobalVar(*$1);
+				}else if(index >= 0){	// local
+					genSetLocalVar(index);
+				}
+			}
 		}
 		 | ID '[' expression ']' '=' expression
 		{
@@ -243,8 +251,8 @@ statement: ID '=' expression
 			if(tmp == NULL) yyerror("undeclared identifier " + *$2);
 			if(tmp->flag != Var_flag) yyerror("ERROR : " + *$2 + " not var, cannot be set value");
 		}
-		 | RETURN { Trace("statement: return"); }
-		 | RETURN expression { Trace("statement: return expression"); }
+		 | RETURN { Trace("statement: return"); genReturn();}
+		 | RETURN expression { Trace("statement: return expression"); geniReturn();}
 		 | GO func_invocation
 		 | compound { Trace("statement: compound"); }
 		 | conditional
@@ -296,21 +304,26 @@ compound: '{' {stl.pushTable();}
 		  '}' {if(Opt_DS)stl.dump();if(!stl.popTable()) yyerror("ERROR : pop symbol table error");}
 		;
 
-conditional: IF '(' expression ')' statement
+conditional: IF '(' expression ')' ifStart statement
 		    {
 				Trace("if");
 				if($3->type!=Bool_type) yyerror("ERROR : condition not boolean");
+				genIfEnd();
 			}
-		   | IF '(' expression ')' statement ELSE statement
+		   | IF '(' expression ')' ifStart statement ELSE { genElse(); } statement
 		    {
 				Trace("if else");
 				if($3->type!=Bool_type) yyerror("ERROR : condition not boolean");
+				genIfElseEnd();
 			}
 		   ;
 
-loop: FOR '(' for_left_exp for_right ')' statement
+ifStart: { genIfStart(); };
+
+loop: FOR '(' for_left_exp { genForCond(); } for_right ')' { genForBody(); } statement
 	{
 		Trace("for");
+		genForEnd();
 	}
 	;
 
@@ -318,9 +331,9 @@ for_left_exp: statement ';' for_exp
 		| ';' for_exp
 		| for_exp
 		;
-for_exp : expression
+for_exp : { genForStart(); } expression
 		{
-			if($1->type!=Bool_type) yyerror("ERROR : for condition not boolean");
+			if($2->type!=Bool_type) yyerror("ERROR : for condition not boolean");
 		}
 		;
 
@@ -395,6 +408,7 @@ expression : ID
 					tmp->flag = Var_flag; tmp->type= $1->type;
 					$$ = tmp;
 				}
+				if($1->type == Int_type) genOperator('+');
 			}
 		   | expression '-' expression
 			{
@@ -413,6 +427,7 @@ expression : ID
 					tmp->flag = Var_flag; tmp->type= $1->type;
 					$$ = tmp;
 				}
+				if($1->type == Int_type) genOperator('-');
 			}
 		   | expression '*' expression
 			{
@@ -431,6 +446,7 @@ expression : ID
 					tmp->flag = Var_flag; tmp->type= $1->type;
 					$$ = tmp;
 				}
+				if($1->type == Int_type) genOperator('*');
 			}
 		   | expression '/' expression
 			{
@@ -449,6 +465,7 @@ expression : ID
 					tmp->flag = Var_flag; tmp->type= $1->type;
 					$$ = tmp;
 				}
+				if($1->type == Int_type) genOperator('/');
 			}
 		   | expression '%' expression
 			{
@@ -465,6 +482,7 @@ expression : ID
 					tmp->flag = Var_flag; tmp->type= $1->type;
 					$$ = tmp;
 				}
+				if($1->type == Int_type) genOperator('%');
 			}
 		   | expression '^' expression
 			{
@@ -499,6 +517,7 @@ expression : ID
 					tmp->flag = Var_flag; tmp->type = Bool_type;
 					$$ = tmp;
 				}
+				if($1->type == Int_type) genCondOp(IFLT);
 			}
 		   | expression '>' expression
 			{
@@ -516,6 +535,7 @@ expression : ID
 					tmp->flag = Var_flag; tmp->type = Bool_type;
 					$$ = tmp;
 				}
+				if($1->type == Int_type) genCondOp(IFGT);
 			}
 		   | expression LE expression
 			{
@@ -533,6 +553,7 @@ expression : ID
 					tmp->flag = Var_flag; tmp->type= Bool_type;
 					$$ = tmp;
 				}
+				if($1->type == Int_type) genCondOp(IFLE);
 			}
 		   | expression GE expression
 			{
@@ -550,6 +571,7 @@ expression : ID
 					tmp->flag = Var_flag; tmp->type= Bool_type;
 					$$ = tmp;
 				}
+				if($1->type == Int_type) genCondOp(IFGE);
 			}
 		   | expression EQ expression
 			{
@@ -569,6 +591,7 @@ expression : ID
 					tmp->flag = Var_flag; tmp->type= Bool_type;
 					$$ = tmp;
 				}
+				if($1->type == Int_type || $1->type == Bool_type) genCondOp(IFEQ);
 			}
 		   | expression NEQ expression
 			{
@@ -588,6 +611,7 @@ expression : ID
 					tmp->flag = Var_flag; tmp->type= Bool_type;
 					$$ = tmp;
 				}
+				if($1->type == Int_type || $1->type == Bool_type) genCondOp(IFNE);
 			}
 		   | expression AND expression
 			{
@@ -603,6 +627,7 @@ expression : ID
 					tmp->flag = Var_flag; tmp->type= Bool_type;
 					$$ = tmp;
 				}
+				if($1->type == Bool_type) genOperator('&');
 			}
 		   | expression OR expression
 			{
@@ -618,6 +643,7 @@ expression : ID
 					tmp->flag = Var_flag; tmp->type= Bool_type;
 					$$ = tmp;
 				}
+				if($1->type == Bool_type) genOperator('|');
 			}
 		   | '!' expression
 			{
@@ -630,7 +656,7 @@ expression : ID
 					tmp->flag = Var_flag; tmp->type= Bool_type;
 					$$ = tmp;
 				}
-
+				if($2->type == Bool_type) genOperator('!');
 			}
 		   | expression '&' expression
 			{
@@ -646,6 +672,7 @@ expression : ID
 					tmp->flag = Var_flag; tmp->type= $1->type;
 					$$ = tmp;
 				}
+				if($1->type == Int_type) genOperator('&');
 			}
 		   | expression '|' expression
 			{
@@ -677,6 +704,7 @@ expression : ID
 					tmp->flag = Var_flag; tmp->type= $2->type;
 					$$ = tmp;
 				}
+				if($2->type == Int_type) genOperator('_');
 			}
 		   | '+' expression %prec UPLUS
 			{

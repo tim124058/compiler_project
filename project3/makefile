@@ -29,5 +29,5 @@ run: $(TARGET)
 	@echo "--------- run -----------"
 	@java $(file)
 	@echo "--------- end -----------"
-	#rm $(file).jasm $(file).class
+	@#rm $(file).jasm $(file).class
 
