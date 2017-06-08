@@ -1,35 +1,36 @@
-# 編譯器 projet2
+# 編譯器 projet3
 
 
-### 編譯指令
+### 編譯和執行
+
+若要編譯的程式檔名為 "test.go" :
+
+	$ make run file=test
+
+or
 
 	$ make
+	$ ./compiler test.go
+	$ ./javaa test.jasm
+	$ java test
 
-
-### 執行
-
-輸入檔案：
-
-	$ cat test.go | ./parser
-
-直接執行(`ctrl+d`結束輸入)：
-
-	$ ./parser
-
-
-
-### 輸出說明
-
-預設會印出每一行，且遇到`}`時，印出當時scope的所有symbol table(由近到遠顯示)。  
-如果parser.y中的Opt_P=1時會印出parse時的詳細資訊。  
 
 
 ### scanner變動
-	1. #include "y.tab.hpp"
-	2. 新增prtT、prtS，代表是否輸出token和source code的flag
-	3. 將SymbolTable獨立出來，變成symbols.hpp和symbols.cpp
-	4. 將用到SymbolTable的部分移除
-	5. 設定token的回傳值
-	6. 在id,bool,int,str的token部分，設定要傳給parser的值
-	7. 移除main function
+	無
+
+### parser變動
+	1. 改成使用參數輸入檔案
+	2. 輸入改成讀檔和新增寫檔
+	3. #include "codegen.hpp"
+	4. 在需要產生java asm的地方加入codegen中的function
+
+### symbols變動
+	1. 新增isGlobal：判斷目前的scope是否為global
+	2. 新增getIndex：使用變數名稱取得對應的index
+	3. 新增getIntBoolValue：取得struct中的int或bool值，且回傳為int
+
+### 新增codegen
+	1. 產成java asm並寫入檔案
+	2. 負責管理label的產生順序
 

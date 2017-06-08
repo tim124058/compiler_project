@@ -81,7 +81,7 @@ public:
 
 	bool setFuncParam(string,int);	// set function parameters
 
-	int getIndex(string s);			// get index of s
+	int getIndex(string s);			// get index of s : -2=>not found, -1=>global , lg 0=>local
 	bool isGlobal();				// current scope is Global
 
 	int dump();						// dump all SymbolTable (from top to 0)

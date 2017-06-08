@@ -148,7 +148,7 @@ bool SymbolTableList::setFuncParam(string name,int type){
 	return true;
 }
 
-// get variable index ,-2,not found -1=>global , >0 =>local
+// get index of s : -2=>not found, -1=>global , lg 0=>local
 int SymbolTableList::getIndex(string s){
 	for(int i=top;i>=0;i--){
 		if(list[i].isExist(s)){
