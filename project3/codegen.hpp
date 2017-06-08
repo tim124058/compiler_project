@@ -74,6 +74,7 @@ void genIfEnd();
 void genIfElseEnd();
 
 void genForStart();
+void genForStart2();
 void genForCond();
 void genForBody();
 void genForEnd();

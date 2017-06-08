@@ -196,9 +196,9 @@ void genCondOp(int op){
 	out << " L" << lb1 << "\n";
 	out << "iconst_0\n";
 	out << "goto L" << lb2 << "\n";
-	out << "L" << lb1 << ":\n";
+	out << "nop\nL" << lb1 << ":\n";
 	out << "iconst_1\n";
-	out << "L" << lb2 << ":\n";
+	out << "nop\nL" << lb2 << ":\n";
 }
 
 void genIfStart(){
@@ -207,39 +207,40 @@ void genIfStart(){
 }
 void genElse(){
 	out << "goto L" << lm.takeLabel(1) << "\n";
-	out << "L" << lm.takeLabel(0) << ":\n";
+	out << "nop\nL" << lm.takeLabel(0) << ":\n";
 }
 void genIfEnd(){
-	out << "L" << lm.takeLabel(0) << ":\n";
+	out << "nop\nL" << lm.takeLabel(0) << ":\n";
 	lm.popLabel();
 }
 void genIfElseEnd(){
-	out << "L" << lm.takeLabel(1) << ":\n";
+	out << "nop\nL" << lm.takeLabel(1) << ":\n";
 	lm.popLabel();
 }
 
+// forloop start for "for(;true;) or for(true;)"
 void genForStart(){
-	if(lm.getFLAG() == -1){
-		lm.pushNLabel(5);
-		out << "L" << lm.takeLabel(0) << ":\n";			// Lstart
-		lm.addFLAG();
-	}else if(lm.getFLAG() == 0){
-		lm.addFLAG();
-		out << "L" << lm.takeLabel(0+lm.getFLAG()) << ":\n";		// Lstart
-	}
+	lm.pushNLabel(5);
+	lm.addFLAG();
+	out << "nop\nL" << lm.takeLabel(0) << ":\n";			// Lstart
+}
+// forloop start for "for(i=1;true;)"
+void genForStart2(){
+	lm.addFLAG();
+	out << "nop\nL" << lm.takeLabel(0+lm.getFLAG()) << ":\n";		// Lstart2
 }
 void genForCond(){
 	out << "ifeq L" << lm.takeLabel(3+lm.getFLAG()) << "\n";		// if false goto Lexit
 	out << "goto L" << lm.takeLabel(2+lm.getFLAG()) << "\n";		// goto Lbody
-	out << "L" << lm.takeLabel(1+lm.getFLAG()) << ":\n";			// Lpost
+	out << "nop\nL" << lm.takeLabel(1+lm.getFLAG()) << ":\n";		// Lpost
 }
 void genForBody(){
-	out << "goto L" << lm.takeLabel(0+lm.getFLAG()) << "\n";		// goto Lstart
-	out << "L" << lm.takeLabel(2+lm.getFLAG()) << ":\n";			// Lbody
+	out << "goto L" << lm.takeLabel(0+lm.getFLAG()) << "\n";		// goto Lstart or start2
+	out << "nop\nL" << lm.takeLabel(2+lm.getFLAG()) << ":\n";		// Lbody
 }
 void genForEnd(){
 	out << "goto L" << lm.takeLabel(1+lm.getFLAG()) << "\n";		// goto Lpost
-	out << "L" << lm.takeLabel(3+lm.getFLAG()) << ":\n";			// Lexit
+	out << "nop\nL" << lm.takeLabel(3+lm.getFLAG()) << ":\n";		// Lexit
 	lm.popLabel();
 }
 
