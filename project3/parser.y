@@ -320,22 +320,23 @@ conditional: IF '(' expression ')' ifStart statement
 
 ifStart: { genIfStart(); };
 
-loop: FOR '(' for_left_exp { genForCond(); } for_right ')' { genForBody(); } statement
+loop: FOR '(' forStart for_left_exp { genForCond(); } for_right ')' { genForBody(); } statement
 	{
 		Trace("for");
 		genForEnd();
 	}
 	;
 
-for_left_exp: statement ';' for_exp
+for_left_exp: statement ';' forStart for_exp
 		| ';' for_exp
 		| for_exp
 		;
-for_exp : { genForStart(); } expression
+for_exp : expression
 		{
-			if($2->type!=Bool_type) yyerror("ERROR : for condition not boolean");
+			if($1->type!=Bool_type) yyerror("ERROR : for condition not boolean");
 		}
 		;
+forStart:{ genForStart(); };
 
 for_right: ';' statement
 		 | ';'

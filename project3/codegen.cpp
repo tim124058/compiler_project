@@ -4,6 +4,7 @@ LabelManager lm;
 LabelStruct::LabelStruct(int lc,int max){
 	LC = lc;
 	Max = max;
+	FOR_FLAG = -1;
 }
 
 LabelManager::LabelManager(){
@@ -28,6 +29,12 @@ int LabelManager::takeLabel(int i){
 int LabelManager::getLable(){
 	labelCount++;
 	return labelCount-1;
+}
+void LabelManager::addFLAG(){
+	lmStack.top().FOR_FLAG = lmStack.top().FOR_FLAG + 1;
+}
+int LabelManager::getFLAG(){
+	return lmStack.top().FOR_FLAG;
 }
 
 
@@ -212,21 +219,27 @@ void genIfElseEnd(){
 }
 
 void genForStart(){
-	lm.pushNLabel(4);
-	out << "L" << lm.takeLabel(0) << ":\n";			// Lstart
+	if(lm.getFLAG() == -1){
+		lm.pushNLabel(5);
+		out << "L" << lm.takeLabel(0) << ":\n";			// Lstart
+		lm.addFLAG();
+	}else if(lm.getFLAG() == 0){
+		lm.addFLAG();
+		out << "L" << lm.takeLabel(0+lm.getFLAG()) << ":\n";		// Lstart
+	}
 }
 void genForCond(){
-	out << "ifeq L" << lm.takeLabel(3) << "\n";		// if false goto Lexit
-	out << "goto L" << lm.takeLabel(2) << "\n";		// goto Lbody
-	out << "L" << lm.takeLabel(1) << ":\n";			// Lpost
+	out << "ifeq L" << lm.takeLabel(3+lm.getFLAG()) << "\n";		// if false goto Lexit
+	out << "goto L" << lm.takeLabel(2+lm.getFLAG()) << "\n";		// goto Lbody
+	out << "L" << lm.takeLabel(1+lm.getFLAG()) << ":\n";			// Lpost
 }
 void genForBody(){
-	out << "goto L" << lm.takeLabel(0) << "\n";		// goto Lstart
-	out << "L" << lm.takeLabel(2) << ":\n";			// Lbody
+	out << "goto L" << lm.takeLabel(0+lm.getFLAG()) << "\n";		// goto Lstart
+	out << "L" << lm.takeLabel(2+lm.getFLAG()) << ":\n";			// Lbody
 }
 void genForEnd(){
-	out << "goto L" << lm.takeLabel(1) << "\n";		// goto Lpost
-	out << "L" << lm.takeLabel(3) << ":\n";			// Lexit
+	out << "goto L" << lm.takeLabel(1+lm.getFLAG()) << "\n";		// goto Lpost
+	out << "L" << lm.takeLabel(3+lm.getFLAG()) << ":\n";			// Lexit
 	lm.popLabel();
 }
 

@@ -15,18 +15,21 @@ struct LabelStruct{
 	int LC;			// The labelCount at that time
 	int Max;		// number of Label required for the statement
 	LabelStruct(int lc,int max);
+	int FOR_FLAG;
 };
 // manage all label index
 class LabelManager{
 private:
 	int labelCount;
-	stack<LabelStruct> lmStack;
 public:
+	stack<LabelStruct> lmStack;
 	LabelManager();
 	void pushNLabel(int);
 	void popLabel();
 	int takeLabel(int);
 	int getLable();
+	void addFLAG();
+	int getFLAG();
 };
 
 void genProgramStart();
