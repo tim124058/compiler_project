@@ -158,6 +158,10 @@ void genOperator(char op){
 		case '|':
 			out << "ior\n";
 			break;
+		case '!':
+			out << "ldc 1\n";
+			out << "ixor\n";
+			break;
 		case '_':
 			out << "ineg\n";
 			break;
